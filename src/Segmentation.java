@@ -4,7 +4,6 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
-import java.nio.Buffer;
 import java.util.ArrayList;
 
 public class Segmentation {
@@ -12,23 +11,24 @@ public class Segmentation {
         //load image file
         File file = new File("ᠮᠣᠩᠭᠤᠯ.png");
         //Buffered Image object
-        //Buffered Image object
         BufferedImage img = null;
-        //try-catch block to see if the file exists
-        //Error Handling
-        ArrayList<Point> edges = new ArrayList<>();
+        //Error Handling try-catch block to see if the file exists
         try {
             img = ImageIO.read(file);
         } catch (IOException e) {
             e.printStackTrace(System.out);
         }
         if (img != null) {
+            //method to display the image
             display(img);
         }
 
         //method to segment the word letter by letter
-        edges= detectWordSpace(img);
-        segmentLetters();
+        int[] edgesCoordinates= detectWordSpace(img);
+        //crops the image to the detected coordinates
+        BufferedImage wordOnly = crop(img, edgesCoordinates);
+        int spineColumn = findSpine(wordOnly);
+        ArrayList<Integer> cutPositions = segmentLetters(wordOnly, spineColumn);
     }
 
     //display image in a JPanel popup
@@ -50,14 +50,16 @@ public class Segmentation {
         frame.setVisible(true);
     }
 
-    public static ArrayList<Point> detectWordSpace(BufferedImage img){
+    //method to detect where the words are within the given image
+    public static int[] detectWordSpace(BufferedImage img){
+        //Variable Declarations
         int width = img.getWidth();    // number of columns
         int height = img.getHeight();  // number of rows
-        int[] colSums = new int[width];
-        int maxVal=0;
         ArrayList<Point> letterPixels = new ArrayList<>();
-        int threshold =0;
-        ArrayList<Point> edgePixels = new ArrayList<>();
+        int threshold = 10;
+        ArrayList<Point> edgePixels = new ArrayList<>(); //will i use this?
+        int leftestWidth = img.getWidth(), lowestHeight = img.getHeight();
+        int rightestWidth=0, highestHeight=0;
 
         //detecting letters in pure black and white environment
         //black strokes should be less than or equal to 10
@@ -80,16 +82,10 @@ public class Segmentation {
             int y = p.y;
         }
 
-        int leftestWidth, lowestHeight, rightestWidth, highestHeight;
-
         if (!letterPixels.isEmpty()) {
             int letterCount = 1;
             //saving the leftest width (lowest)
             leftestWidth = letterPixels.getFirst().x;
-            //initialization variable
-            rightestWidth = 0;
-            lowestHeight = letterPixels.getFirst().y;
-            highestHeight = 0;
 
             for (int i= 0; i < letterPixels.size()-1; i++) {
                 //getting the highest height
@@ -112,28 +108,109 @@ public class Segmentation {
             System.out.println(lowestHeight);
             System.out.println(highestHeight);
 
-            // detect the area of pixels that has letters
+            // adding the edges to the Arraylist. Will I use this?
             edgePixels.add(new Point(leftestWidth, lowestHeight));
             edgePixels.add(new Point(leftestWidth, highestHeight));
             edgePixels.add(new Point(rightestWidth, lowestHeight));
             edgePixels.add(new Point(rightestWidth, highestHeight));
+        }
+        return new int[] {leftestWidth, lowestHeight, rightestWidth, highestHeight};
+    }
 
-            //display cropped image
-            System.out.println("Printing cropped image");
-            BufferedImage croppedImg = img.getSubimage(leftestWidth, lowestHeight,
-                    rightestWidth-leftestWidth+1, highestHeight-lowestHeight+1);
-            JFrame frame = new JFrame();
-            frame.add(new JLabel(new ImageIcon(croppedImg)));
-            frame.pack();
-            frame.setVisible(true);
+    //crops the input image into only words
+    public static BufferedImage crop (BufferedImage img, int[] edgeCoordinates) {
+        BufferedImage croppedImg = img.getSubimage( edgeCoordinates[0], edgeCoordinates[1],
+                edgeCoordinates[2]-edgeCoordinates[0]+1,
+                edgeCoordinates[3]-edgeCoordinates[1]+1);
+        System.out.println("Printing cropped image with words only");
+        display (croppedImg);
+        return croppedImg;
+    }
 
+    //finds the main body line from the letters by calculating the column
+    //that has the lowest value
+    public static int findSpine(BufferedImage img) {
+        int width= img.getWidth();
+        int height = img.getHeight();
+        int[] colSums = new int[width];
+        int minColumnIndex = 0;
+        //gets the sum for each column pixels
+        for (int x = 0; x < width; x++) {
+            for (int y = 0; y < height; y++) {
+                int pixel = img.getRGB(x, y) & 0xff;
+                //finds column sum for each column;
+                colSums[x] +=pixel;
+                }
+            }
+        //where to place this?
+        int minColumn = colSums[0];
+        //finds the index for the column with the lowest value
+        for (int x = 0; x < width-1; x++) {
+            System.out.println(colSums[x]);
+            if (colSums[x] < minColumn) {
+                minColumn = colSums[x];
+                minColumnIndex = x;
+            }
+        }
+        System.out.println("Min Column Sum: " + minColumn + " column x: " + minColumnIndex);
+        return minColumnIndex;
+    }
+
+    //Segments the letter from cropped image by dividing the picture with 3 by width
+    //and getting white spaces between each letter
+    public static ArrayList<Integer> segmentLetters(BufferedImage img, int num) {
+        ArrayList<Integer> transitions = new ArrayList<>();
+        transitions.add(0); //picture starts with 0 height
+        int width = img.getWidth();
+        int height= img.getHeight();
+        int leftZoneEnd = width/3;
+        int[] vertSums = new int[height];
+        int maxRow = vertSums[0];
+        //variable to keep track of the row changes
+        int[] diff = new int[height-1];
+        double mean = 0;
+
+        int[] leftZone = new int[] {0,0, leftZoneEnd, height-1};
+        crop(img,leftZone);
+
+        //find vertical sum to find where the white spaces are after
+        //the image is divided into 3 parts by width
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < leftZoneEnd; x++) {
+                int pixel = img.getRGB(x, y) & 0xff;
+                //finds row sum for each column;
+                vertSums[y] +=pixel;
+            }
         }
 
-        return edgePixels;
-    }
-    //how to pass ArrayListPoint as an argument?
-    public static void segmentLetters() {
+        for (int v : vertSums) {
+            System.out.println(v);
+        }
 
+        for (int i = 1; i < vertSums.length; i++) {
+            if (vertSums[i] > maxRow) {
+                maxRow = vertSums[i];
+            }
+        }
+
+        //finds the transition zone by checking if there is change between rows and
+        //the row becomes fully white
+        for (int y = 1; y < height - 1; y++) {
+            if ((Math.abs(vertSums[y-1] - vertSums[y]) > 0) && (vertSums[y] == 8856)) {
+                transitions.add(y);
+            }
+        }
+
+        System.out.println(transitions);
+
+        //displays the cropped letters
+        for (int i = 0; i < transitions.size()-1; i++) {
+            int[] segmentCoordinates = new int[] {0, transitions.get(i), width-1, transitions.get(i+1)};
+            crop(img, segmentCoordinates);
+        }
+
+
+        return transitions;
     }
 
 }
@@ -211,3 +288,39 @@ wordExists = false;
 //saving the leftest width
 //edgePixels.add(letterPixels.getFirst());
 // letters.add(letterCorners);
+
+/**
+ //saves the changes of value between rows to an array
+ for (int y = 0; y < height - 1; y++) {
+ diff[y] = Math.abs(vertSums[y + 1] - vertSums[y]);
+ }
+
+
+ for (int y = 2; y < height - 1; y++) {
+ if ((vertSums[y-2] - vertSums[y - 1] > 0)  && (vertSums[y] - vertSums[y + 1] == 0))  {
+ transitions.add(y);
+ }
+ }
+ **/
+/**
+ for (int y = 2; y < diff.length; y++) {
+ if ((diff[y-1] - diff [y-2] > 0) && (diff[y] == 0)) {
+ transitions.add(y);
+ }
+ }
+ **/
+
+/**
+ for (int d : diff) mean += d;
+ mean /= diff.length;
+ double threshold = mean * 2;
+ System.out.println(threshold);
+ //find the transition zone by seeing the changes of value compared with
+ //the next row
+
+ for (int y = 0; y < diff.length; y++) {
+ if (diff[y] > threshold) {
+ transitions.add(y);
+ }
+ }
+ **/
