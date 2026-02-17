@@ -1,49 +1,33 @@
-import java.util.Random;
-
+//Class to create the layers and functions between the Layer and Neuron class
 public class MLP {
     //Variable Declaration
-    //sizes for Hidden Layer, Input Layer, Output Layer
-    int inputSize;
-    int hiddenSize;
-    int outputSize;
-    //weights
-    double[][] weightInput;
-    double[][] weightHidden;
-    //biases
-    double[] biasHidden;
-    double[] biasOutput;
-    //activations
-    double[] hidden;
-    double[] output;
-    //new random variable
-    Random rand = new Random();
+    private Layer[] layers;
 
-    //Constructor with 3 arguments
-    public MLP(int inputSize, int hiddenSize, int outputSize) {
-        this.inputSize = inputSize;
-        this.hiddenSize = hiddenSize;
-        this.outputSize = outputSize;
+    //Construction that take layer sizes as arguments
+    //how much hidden layers to have? 1?
+    public MLP(int inputSize, int[] hiddenLayerNeurons, int outputNeurons) {
+        //saves the input layer size
+        int previousLayerSize = inputSize;
+        //number of layers to create including the output layer
+        layers = new Layer[hiddenLayerNeurons.length + 1];
 
-        weightInput = new double[inputSize][hiddenSize];
-        weightHidden = new double[hiddenSize][outputSize];
+        //creates hidden layer
+        for (int i = 0; i < hiddenLayerNeurons.length; i++) {
+            layers[i] = new Layer(hiddenLayerNeurons[i], previousLayerSize);
+            previousLayerSize = hiddenLayerNeurons[i];
+        }
 
-        biasHidden = new double[hiddenSize];
-        biasOutput = new double[outputSize];
-
-        hidden = new double[hiddenSize];
-        output = new double[outputSize];
-
-        initWeights();
+        //creates output layer
+        layers[layers.length - 1] = new Layer(outputNeurons, previousLayerSize);
     }
 
-    //Initialize weights with random numbers
-    private void initWeights() {
-        for (int i = 0; i < inputSize; i++)
-            for (int j = 0; j < hiddenSize; j++)
-                weightInput[i][j] = rand.nextDouble();
+    //does forward propagation for all tha layers and neurons
+    public double[] forward(double[] input) {
+        double[] output = input;
 
-        for (int i = 0; i < hiddenSize; i++)
-            for (int j = 0; j < outputSize; j++)
-                weightHidden[i][j] = rand.nextDouble();
+        for (Layer layer : layers) {
+            output = layer.forward(output);
+        }
+        return output;
     }
 }

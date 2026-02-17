@@ -5,11 +5,13 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 
 public class Segmentation {
     public static void main(String[] args) {
         //load image file
-        File file = new File("ᠮᠣᠩᠭᠤᠯ.png");
+        String inputFileName = "hongor.png";
+        File file = new File(inputFileName);
         //Buffered Image object
         BufferedImage img = null;
         //Error Handling try-catch block to see if the file exists
@@ -26,9 +28,11 @@ public class Segmentation {
         //method to segment the word letter by letter
         int[] edgesCoordinates= detectWordSpace(img);
         //crops the image to the detected coordinates
-        BufferedImage wordOnly = crop(img, edgesCoordinates);
-        int spineColumn = findSpine(wordOnly);
-        ArrayList<Integer> cutPositions = segmentLetters(wordOnly, spineColumn);
+        BufferedImage wordOnlyImage = crop(img, edgesCoordinates);
+        int spineColumn = findSpine(wordOnlyImage);
+        ArrayList<int[]> letterCoordinates = segmentLetters(wordOnlyImage, spineColumn);
+        resizeLetters(wordOnlyImage, letterCoordinates, inputFileName);
+
     }
 
     //display image in a JPanel popup
@@ -158,7 +162,7 @@ public class Segmentation {
 
     //Segments the letter from cropped image by dividing the picture with 3 by width
     //and getting white spaces between each letter
-    public static ArrayList<Integer> segmentLetters(BufferedImage img, int num) {
+    public static ArrayList<int[]> segmentLetters(BufferedImage img, int num) {
         ArrayList<Integer> transitions = new ArrayList<>();
         transitions.add(0); //picture starts with 0 height
         int width = img.getWidth();
@@ -169,6 +173,7 @@ public class Segmentation {
         //variable to keep track of the row changes
         int[] diff = new int[height-1];
         double mean = 0;
+        ArrayList<int[]> letterCoordinates = new ArrayList<>();
 
         int[] leftZone = new int[] {0,0, leftZoneEnd, height-1};
         crop(img,leftZone);
@@ -196,7 +201,7 @@ public class Segmentation {
         //finds the transition zone by checking if there is change between rows and
         //the row becomes fully white
         for (int y = 1; y < height - 1; y++) {
-            if ((Math.abs(vertSums[y-1] - vertSums[y]) > 0) && (vertSums[y] == 8856)) {
+            if ((Math.abs(vertSums[y-1] - vertSums[y]) > 0) && (vertSums[y] == maxRow)) {
                 transitions.add(y);
             }
         }
@@ -206,11 +211,95 @@ public class Segmentation {
         //displays the cropped letters
         for (int i = 0; i < transitions.size()-1; i++) {
             int[] segmentCoordinates = new int[] {0, transitions.get(i), width-1, transitions.get(i+1)};
+            //saves the x,y,width,height values
+            letterCoordinates.add(new int[] {0, transitions.get(i), width-1, transitions.get(i+1) -transitions.get(i)});
             crop(img, segmentCoordinates);
+        }
+        return letterCoordinates;
+    }
+
+    public static void resizeLetters (BufferedImage croppedImage, ArrayList<int[]> letterCoordinates, String inputFileName) {
+        int targetWidth = 30;
+        int targetHeight = 20;
+        String extractedInputName = inputFileName;
+        String outputFolder = "output";
+
+
+        //gets the index of where the dot is placed inside the input file name to cut the word
+        int cutIndex = inputFileName.lastIndexOf('.');
+        //cuts the input filename to where the dot is placed
+        if (cutIndex > 0) {
+            extractedInputName = inputFileName.substring(0, cutIndex);
+        }
+
+        //creates a folder to save the output
+        //do a try and catch block to get exceptions
+        File folder = new File(outputFolder, extractedInputName);
+        if (!folder.exists()) {
+            folder.mkdirs();
+        }
+
+        //just diplaying coordinates
+        for (int[] coords : letterCoordinates) {
+            System.out.println(Arrays.toString(coords));
+        }
+        //separate image for the letter
+        for (int i=0; i<letterCoordinates.size(); i++) {
+            int width = letterCoordinates.get(i)[2];
+            int height =  letterCoordinates.get(i)[3];
+
+            //displaying segmented letters
+            BufferedImage letter = croppedImage.getSubimage(letterCoordinates.get(i)[0], letterCoordinates.get(i)[1],
+                    width, height);
+            display(letter);
+
+            //calculating scaling value
+            double scale = Math.min( (double) targetWidth / width,
+                    (double) targetHeight / height
+            );
+
+            //calculating updated width and height to resize
+            int scaledWidth = (int) Math.round(width * scale);
+            int scaledHeight = (int) Math.round(height * scale);
+            //creates an image with the size of the scaled width and scaled height
+            BufferedImage scaledImage = new BufferedImage(
+                    scaledWidth, scaledHeight, BufferedImage.TYPE_BYTE_GRAY
+            );
+            display(scaledImage);
+            //writes the letter into the resized image using Graphics2D tool
+            Graphics2D gScaled = scaledImage.createGraphics();
+            gScaled.drawImage(letter, 0, 0, scaledWidth, scaledHeight, null);
+            gScaled.dispose();
+            //padding canvas to reach the target width and target height
+            BufferedImage resizedLetter = new BufferedImage(
+                    targetWidth, targetHeight, BufferedImage.TYPE_BYTE_GRAY
+            );
+
+            //fills the empty canvas with white pixels
+            Graphics2D gOut = resizedLetter.createGraphics();
+            gOut.fillRect(0, 0, targetWidth, targetHeight);
+
+            //how much space to leave when writing the image in order to make it center
+            int xSpace = (targetWidth - scaledWidth) / 2;
+            int ySpace = (targetHeight - scaledHeight) / 2;
+
+            gOut.drawImage(scaledImage, xSpace, ySpace, null);
+            gOut.dispose();
+            display(resizedLetter);
+
+            //save the image into a folder-> need to have dynamic folder name
+            //inside the main folder so each attempt on the app is saved separately
+            File outputFile = new File(folder, "letter_" + i + ".png");
+            try {
+                //Saves the BufferedImage into a png file
+                ImageIO.write(resizedLetter, "png", outputFile);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
         }
 
 
-        return transitions;
     }
 
 }
