@@ -1,5 +1,6 @@
 //Store weights, bias, compute weighted sum of each neurons.
 //Apply activation function
+import java.util.Arrays;
 import java.util.Random;
 
 public class Neuron {
@@ -10,6 +11,7 @@ public class Neuron {
 
     // constructor with the input size
     public Neuron(int inputSize) {
+        System.out.println("Inside neuron class");
         weights = new double[inputSize];
 
         // assigning random weights for each neurons with the random function
@@ -18,13 +20,16 @@ public class Neuron {
             //multiplying by 2 and minusing 1 makes the number between -1 and 1
             //assigns positive and negative weights
             weights[i] = rand.nextDouble() * 2 - 1; // range: -1 to 1
+            System.out.println("Weight " + i + " " + weights[i]);
         }
         //assigns random number for bias that is between -1 and 1
         bias = rand.nextDouble() * 2 - 1;
+
     }
 
     //forward pass to calculate z= weights*inputs+ sum
     public double forward(double[] inputs) {
+        System.out.println("Inside neuron class's forward method");
         double sum = 0.0;
 
         for (int i= 0; i < weights.length; i++) {
@@ -33,7 +38,7 @@ public class Neuron {
 
         sum+= bias;
 
-        return sum;
+        return sigmoid(sum);
     }
 
     // activation function: sigmoid(x) → 1 / (1 + e^-x)

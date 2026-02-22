@@ -2,7 +2,6 @@ import javax.imageio.ImageIO;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.awt.image.IndexColorModel;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -11,7 +10,7 @@ import java.util.Arrays;
 public class Segmentation {
     public static void main(String[] args) {
         //load image file
-        String inputFileName = "segmentWordTest.png";
+        String inputFileName = "overalltest.png";
         File file = new File(inputFileName);
         //Buffered Image object
         BufferedImage img = null;
@@ -32,9 +31,24 @@ public class Segmentation {
         BufferedImage wordOnlyImage = crop(img, edgesCoordinates);
         int spineColumn = findSpine(wordOnlyImage);
         ArrayList <int[]> columnCoordinates = segmentColumns(wordOnlyImage);
-        ArrayList<int[]> eachWordCoordinates = segmentWordsPerColumn(wordOnlyImage, columnCoordinates);
-        //ArrayList <int[]> letterCoordinates = segmentLetters(wordOnlyImage, eachWordCoordinates, spineColumn);
-        // resizeLetters(wordOnlyImage, letterCoordinates, inputFileName);
+        int numberOfColumns = columnCoordinates.size();
+        ArrayList<int[]> everyWordCoordinates = segmentWordsPerColumn(wordOnlyImage, columnCoordinates);
+
+        for (int c[] : everyWordCoordinates) {
+            System.out.println(Arrays.toString(c));
+        }
+        //int numberOfWords = everyWordCoordinates.size();
+
+        //calls the method to segment letters for each word
+
+        for (int w = 0; w < everyWordCoordinates.size()-1; w++) {
+            System.out.println("Word: " + w);
+            System.out.println(Arrays.toString(everyWordCoordinates.get(w)));
+            int[] eachWordCoordinates = everyWordCoordinates.get(w);
+            //how to save the letter coordinates and access it later? do i need to access it? or just keep the pics?
+            ArrayList <int[]> letterCoordinates = segmentLetters(wordOnlyImage, eachWordCoordinates, spineColumn);
+        }
+
 
     }
 
@@ -123,11 +137,18 @@ public class Segmentation {
     }
 
     //crops the input image into the given coordinates
-    //why +1?
     public static BufferedImage crop (BufferedImage img, int[] edgeCoordinates) {
+        System.out.println(
+                "x1=" + edgeCoordinates[0] +
+                        " y1=" + edgeCoordinates[1] +
+                        " x2=" + edgeCoordinates[2] +
+                        " y2=" + edgeCoordinates[3] +
+                        " | imgW=" + img.getWidth() +
+                        " imgH=" + img.getHeight()
+        );
         BufferedImage croppedImg = img.getSubimage( edgeCoordinates[0], edgeCoordinates[1],
                 edgeCoordinates[2]-edgeCoordinates[0],
-                edgeCoordinates[3]-edgeCoordinates[1]+1);
+                edgeCoordinates[3]-edgeCoordinates[1]);
         System.out.println("Printing cropped image with words only");
         display (croppedImg);
         return croppedImg;
@@ -209,24 +230,29 @@ public class Segmentation {
                     transitions.remove(length-1);
                 }
             }
+        }
 
+        //if the last transition is not until the last width of the image, include it; including the last column
+        if (transitions.getLast() != width) {
+            transitions.add(width);
         }
 
         System.out.println(transitions);
 
         //if no transition was added
+
         if (transitions.size() == 1) {
             columnCoordinates.add(new int[] { 0, 0, width, height});
         }
         else {
             //displays the cropped letters and saves the coordinates to an int[] arraylist
             //i+2 helps ignore the white space in between the columns
-            for (int i = 0; i < transitions.size() - 1; i += 2) {
+            for (int i = 0; i < transitions.size() - 1; i ++) {
                 //display purposes
                 int[] segmentCoordinates = new int[]{transitions.get(i), 0, transitions.get(i + 1), height - 1};
                 //saves the x,y,width,height values
                 columnCoordinates.add(new int[]{transitions.get(i), 0, transitions.get(i + 1), height - 1});
-                crop(img, segmentCoordinates);
+                //crop(img, segmentCoordinates);
             }
         }
         //add the last column
@@ -278,8 +304,9 @@ public class Segmentation {
             for (int t = 0; t < transitions.size()-1; t++) {
                 int[] segmentCoordinates = new int[] {startX, transitions.get(t), endX, transitions.get(t+1)};
                 //saves the x,y,width,height values
-                wordCoordinates.add(new int[] {startX, transitions.get(t), endX - startX, transitions.get(t+1)});
-                crop(img, segmentCoordinates);
+                wordCoordinates.add(new int[] {startX, transitions.get(t), endX, transitions.get(t+1)});
+                //crop(img, segmentCoordinates);
+
             }
 
             transitions.clear();
@@ -318,26 +345,32 @@ public class Segmentation {
 
     //Segments the letter from cropped image by dividing the picture with 3 by width
     //and getting white spaces between each letter
-    public static ArrayList<int[]> segmentLetters(BufferedImage img, ArrayList <int[]> eachWordCoordinates, int num) {
+    public static ArrayList<int[]> segmentLetters(BufferedImage img, int[] eachWordCoordinates, int num) {
         //use the int num to count the letters?
+        int numberOfWords = eachWordCoordinates.length;
         ArrayList<Integer> transitions = new ArrayList<>();
         transitions.add(0); //picture starts with 0 height
-        int width = img.getWidth();
-        int height = img.getHeight();
-        //divides the picture's width into 3 to create some white space that will help with the segmentation
-        int leftZoneEnd = width/3;
-        int[] horizontalSums = new int[height];
+        int startX = eachWordCoordinates[0];
+        int startY = eachWordCoordinates[1];
+        int endX = eachWordCoordinates[2];
+        int endY = eachWordCoordinates[3];
+
+        System.out.println(startX + " " +  startY + " " + endX + " " + endY);
+        int width = endX - startX;
+        int height = endY - startY;
+        int leftZoneEnd = width/2 + startX; //divides the picture's width into 3 to create some white space that will help with the segmentation
+        int[] horizontalSums = new int[endY];
         int maxRow = horizontalSums[0];
-        //variable to save the coordinates of the letters
-        ArrayList<int[]> letterCoordinates = new ArrayList<>();
+        ArrayList<int[]> letterCoordinates = new ArrayList<>(); //variable to save the coordinates of the letters
+
         //displays the divided image
-        int[] leftZone = new int[] {0,0, leftZoneEnd, height-1};
+        int[] leftZone = new int[] {startX, startY, leftZoneEnd, endY};
         crop(img,leftZone);
 
         //find vertical sum to find where the white spaces are after
         //the image is divided into 3 parts by width
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < leftZoneEnd; x++) {
+        for (int y = startY; y < endY; y++) {
+            for (int x = startX; x < leftZoneEnd; x++) {
                 int pixel = img.getRGB(x, y) & 0xff;
                 //finds row sum for each row
                 horizontalSums[y] +=pixel;
@@ -357,7 +390,7 @@ public class Segmentation {
 
         //finds the transition zone by checking if there is change between rows and
         //the row becomes fully white
-        for (int y = 1; y < height - 1; y++) {
+        for (int y = 1; y < endY - 1; y++) {
             if ((Math.abs(horizontalSums[y-1] - horizontalSums[y]) > 0) && (horizontalSums[y] == maxRow)) {
                 transitions.add(y);
             }
@@ -367,11 +400,13 @@ public class Segmentation {
 
         //displays the cropped letters and saves the coordinates to an int[] arraylist
         for (int i = 0; i < transitions.size()-1; i++) {
-            int[] segmentCoordinates = new int[] {0, transitions.get(i), width-1, transitions.get(i+1)};
+            int[] segmentCoordinates = new int[] {startX, transitions.get(i), endX, transitions.get(i+1)};
             //saves the x,y,width,height values
-            letterCoordinates.add(new int[] {0, transitions.get(i), width-1, transitions.get(i+1) -transitions.get(i)});
+            letterCoordinates.add(new int[] {startX, transitions.get(i), endX, transitions.get(i+1)});
             crop(img, segmentCoordinates);
         }
+        transitions.clear();
+
         return letterCoordinates;
     }
 
