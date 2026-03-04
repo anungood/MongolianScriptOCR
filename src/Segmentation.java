@@ -57,6 +57,7 @@ public class Segmentation {
 
         //finds the coordinates for every word in every column
         ArrayList<int[]> everyWordCoordinates = segmentWordsPerColumn(wordOnlyImage, columnCoordinates);
+        trimWhiteSpace(wordOnlyImage, everyWordCoordinates);
 
         //counter variable to keep track of which column the words are in
         int i =0;
@@ -65,13 +66,13 @@ public class Segmentation {
             int[] eachWordCoordinates = everyWordCoordinates.get(w);
             //if the spine column is within the coordinates range for width of the word , the method is called
             if (everyWordCoordinates.get(w)[0] < spineColumn[i] && spineColumn[i] < everyWordCoordinates.get(w)[2]) {
-                letterCoordinates.addAll(segmentLetters(wordOnlyImage, eachWordCoordinates, spineColumn[i]));
+               letterCoordinates.addAll(segmentLetters(wordOnlyImage, eachWordCoordinates, spineColumn[i]));
             }
             //or else, the next spine column is used to call the method for segmenting the words until it reaches its maximum
             else if (everyWordCoordinates.get(w)[0] > spineColumn[i]) {
                 i++;
                 if(i < spineColumn.length) {
-                    letterCoordinates.addAll(segmentLetters(wordOnlyImage, eachWordCoordinates, spineColumn[i]));
+                   letterCoordinates.addAll(segmentLetters(wordOnlyImage, eachWordCoordinates, spineColumn[i]));
                 }
             }
 
@@ -140,36 +141,56 @@ public class Segmentation {
         }
     }
 
+    //Method to cut the white space before the start of each words
+    public static void trimWhiteSpace( BufferedImage img, ArrayList<int[]> wordCoordinates) {
+        for (int[] word : wordCoordinates) {
+            int startX = word[0];
+            int startY = word[1];
+            int endX = word[2];
+            int endY = word[3];
+            int threshold = 10;
+            int newTop = endY;
+
+            //black strokes should be less than or equal to 10; Value of 0 is ideal
+            for (int x = startX; x < endX; x++) {
+                for (int y = startY; y < endY; y++) {
+                    int pixel = img.getRGB(x, y) & 0xff;
+                    if (pixel <= threshold) {
+                        if (y < newTop) { //if the value of y of a black pixel is less than the variable, the variable is updated
+                            newTop = y;
+                        }
+                    }
+                }
+            }
+            //if the new top variables is less than the current top variable, the startY is updated to trim the white space
+            if (newTop < endY) {
+                word[1] = newTop;
+            }
+        }
+    }
+
     //crops the input image into the given coordinates
     public static BufferedImage crop (BufferedImage img, int[] edgeCoordinates) {
-        System.out.println(
-                "x1=" + edgeCoordinates[0] +
-                        " y1=" + edgeCoordinates[1] +
-                        " x2=" + edgeCoordinates[2] +
-                        " y2=" + edgeCoordinates[3] +
-                        " | imgW=" + img.getWidth() +
-                        " imgH=" + img.getHeight()
-        );
         BufferedImage croppedImg = img.getSubimage( edgeCoordinates[0], edgeCoordinates[1],
                 edgeCoordinates[2]-edgeCoordinates[0],
                 edgeCoordinates[3]-edgeCoordinates[1]);
-        System.out.println("Printing cropped image with words only");
+        System.out.println("Printing cropped image");
         display (croppedImg);
         return croppedImg;
     }
 
     //finds the main body line from the letters by calculating the column
     //that has the lowest value; how will i use this?
-    public static int findSpine(BufferedImage img, int[] coords) {
+    public static int findSpine(BufferedImage img, int[] columnCoordinate) {
         // Variable Declarations
-        int startX = coords[0];
-        int startY = coords[1];
-        int endX = coords[2];
-        int endY = coords[3];
+        int startX = columnCoordinate[0];
+        int startY = columnCoordinate[1];
+        int endX = columnCoordinate[2];
+        int endY = columnCoordinate[3];
         int width= endX - startX;
         int height = endY - startY;
         int[] colSums = new int[endX];
-        int minColumnIndex = 0;
+        int minColumnIndex = startX; //variable to save the index for the lowest column value
 
         //gets the sum for each column pixels
         for (int x = startX; x < endX; x++) {
@@ -178,14 +199,12 @@ public class Segmentation {
                 //finds column sum for each column;
                 colSums[x] +=pixel;
                 }
-            //System.out.println("Column sum: "+ x + colSums[x]);
             }
 
         int minColumn = colSums[startX]; //variable to hold the value of the minimum column sum which will have the most black pixels
 
         //finds the index for the column with the lowest value
         for (int x = startX; x < endX; x++) {
-            //System.out.println(colSums[x]);
             if (colSums[x] < minColumn) {
                 minColumn = colSums[x];
                 minColumnIndex = x;
@@ -195,8 +214,7 @@ public class Segmentation {
         return minColumnIndex;
     }
 
-    //method to count how many column there is in the input image and find where each of the column start and end
-    //by using the white space
+    //method to find the coordinates for each column in the input image
     //should I use sobel algorithm? or implement 2d matrices for complexity?
     public static ArrayList<int[]> segmentColumns(BufferedImage img) {
         //variable to keep the transitions
@@ -207,6 +225,7 @@ public class Segmentation {
         int height = img.getHeight();
         int[] vertSums = new int[width];
         int maxColumn = vertSums[0];
+        int columnThreshold = 10; //make the threshold dynamic!
 
         //find sum of the columns
         for (int x = 0; x < width; x++) {
@@ -215,11 +234,6 @@ public class Segmentation {
                 //finds column sum for each column
                 vertSums[x] +=pixel;
             }
-        }
-
-        //displaying the values
-        for (int v : vertSums) {
-            System.out.println(v);
         }
 
         //finding the column with the maximum sum
@@ -234,11 +248,11 @@ public class Segmentation {
         for (int x = 1; x < width - 1; x++) {
             if (((Math.abs(vertSums[x-1] - vertSums[x]) > 0) && (vertSums[x] == maxColumn)) || (vertSums[x] == maxColumn) && Math.abs(vertSums[x+1] - vertSums[x]) > 0) {
                 transitions.add(x);
-                //transition has to be at least 2 pixel long to be considered a transition
-                //make the threshold dynamic
+                //transition has to be at least 10 pixel long to be considered a transition
+                //if the transition length is lower than the threshold, it is not considered as a transition
                 int length = transitions.size();
                 System.out.println(length);
-                if (transitions.get(length-1) - transitions.get(length-2) < 10) {
+                if (transitions.get(length-1) - transitions.get(length-2) < columnThreshold) {
                     transitions.remove(length-1);
                 }
             }
@@ -251,41 +265,35 @@ public class Segmentation {
 
         System.out.println(transitions);
 
-        //if no transition was added
-
+        //if no transition was added it will return the image
         if (transitions.size() == 1) {
             columnCoordinates.add(new int[] { 0, 0, width, height});
         }
         else {
-            //displays the cropped letters and saves the coordinates to an int[] arraylist
-            //i+2 helps ignore the white space in between the columns
+            //displays the cropped columns and saves the coordinates to an int[] arraylist
             for (int i = 0; i < transitions.size() - 1; i ++) {
                 //display purposes
                 int[] segmentCoordinates = new int[]{transitions.get(i), 0, transitions.get(i + 1), height - 1};
                 //saves the x,y,width,height values
                 columnCoordinates.add(new int[]{transitions.get(i), 0, transitions.get(i + 1), height - 1});
-                crop(img, segmentCoordinates);
+                //crop(img, segmentCoordinates);
             }
         }
-        //add the last column
         System.out.println(("Finishing column coordinates"));
         return columnCoordinates;
     }
 
-    //method to count how many word there is in each column and find where the words start and end by using the white space
+    //method to find the word coordinates by using the row sum
     public static ArrayList<int[]> segmentWordsPerColumn(BufferedImage img, ArrayList <int[]> columnCoordinates) {
         //variable to keep track of the transitions
         System.out.println("Starting segmenting words " + columnCoordinates.size() );
         ArrayList<Integer> transitions = new ArrayList<>();
-        transitions.add(0);
         ArrayList<int[]> wordCoordinates = new ArrayList<>();
 
         for (int[] arr : columnCoordinates) {
             System.out.println(Arrays.toString(arr));
-            System.out.println("whatt");
         }
 
-        System.out.println("displaying column coordinates");
         //maybe like make a general method for finding row sums bcs it is so redundant
         for (int i = 0; i < columnCoordinates.size(); i++) {
             int[] coords = columnCoordinates.get(i);
@@ -295,7 +303,7 @@ public class Segmentation {
             int startY = coords[1];
             int endX = coords[2];
             int endY = coords[3];
-            int height = endY - startY;
+            transitions.add(startY);
             System.out.println(startX + " " + startY + " " + endX + " " + endY);
             int[] horizontalSums = findRowSum(img, startX, startY, endX, endY);
             //displaying the values
@@ -317,13 +325,9 @@ public class Segmentation {
                 int[] segmentCoordinates = new int[] {startX, transitions.get(t), endX, transitions.get(t+1)};
                 //saves the x,y,width,height values
                 wordCoordinates.add(new int[] {startX, transitions.get(t), endX, transitions.get(t+1)});
-                //crop(img, segmentCoordinates);
-
+                crop(img, segmentCoordinates);
             }
-
             transitions.clear();
-            transitions.add(0);
-
         }
         return wordCoordinates;
     }
@@ -360,51 +364,34 @@ public class Segmentation {
     public static ArrayList<int[]> segmentLetters(BufferedImage img, int[] eachWordCoordinates, int spineIndex) {
         //Variable Declarations
         ArrayList<Integer> transitions = new ArrayList<>();
-        transitions.add(0); //picture starts with 0 height
         int startX = eachWordCoordinates[0];
         int startY = eachWordCoordinates[1];
         int endX = eachWordCoordinates[2];
         int endY = eachWordCoordinates[3];
+        transitions.add(startY);
 
         System.out.println("Word coordinates: " + startX + " " +  startY + " " + endX + " " + endY);
         System.out.println("Spine: " + spineIndex);
-        int width = endX - startX;
-        int height = endY - startY;
-        //MAKE THIS DYNAMIC!
-        int leftZoneEnd = startX + (spineIndex-startX) - (spineIndex-startX)/8; //divides the picture's width into 3 to create some white space that will help with the segmentation
-        int[] horizontalSums = new int[endY];
-        int maxRow = horizontalSums[0];
+
         ArrayList<int[]> letterCoordinates = new ArrayList<>(); //variable to save the coordinates of the letters
+        //Dynamic way to cut the words to create white space by using where the spine of words are
+        int leftZoneEnd = startX + (spineIndex-startX) - (spineIndex-startX)/8;
+
+        //displays the original image
         int[] originalWord = new int[] {startX, startY, endX, endY};
         crop(img, originalWord);
+
         //displays the divided image
         int[] leftZone = new int[] {startX, startY, leftZoneEnd, endY};
         crop(img,leftZone);
 
-        //find vertical sum to find where the white spaces are after
-        //the image is divided into 3 parts by width
-        for (int y = startY; y < endY; y++) {
-            for (int x = startX; x < leftZoneEnd; x++) {
-                int pixel = img.getRGB(x, y) & 0xff;
-                //finds row sum for each row
-                horizontalSums[y] +=pixel;
-            }
-        }
-        //displaying the values
-        for (int i = startY; i <horizontalSums.length ; i++) {
-            System.out.println(horizontalSums[i]);
-        }
-
-        //finding the row with the maximum value because that is equal to the white space and thus the transition
-        for (int i = startY; i < horizontalSums.length; i++) {
-            if (horizontalSums[i] > maxRow) {
-                maxRow = horizontalSums[i];
-            }
-        }
+        //find vertical sum to find where the white spaces are after the image is divided to for clear segmentation between letters
+        int[] horizontalSums = findRowSum(img, startX, startY, leftZoneEnd, endY);
+        int maxRow = findMaxRowValue(horizontalSums);
 
         System.out.println("Max row: " + maxRow);
-        //finds the transition zone by checking if there is change between rows and
-        //the 'row' becomes fully white
+
+        //finds the transition zone by checking if there is change between rows and if the row becomes fully white later
         for (int y = startY + 1 ; y < endY - 1; y++) {
             if ((Math.abs(horizontalSums[y-1] - horizontalSums[y]) > 0) && (horizontalSums[y] == maxRow)) {
                 transitions.add(y);
@@ -424,7 +411,6 @@ public class Segmentation {
 
         transitions.clear();
         return letterCoordinates;
-
     }
 
     public static void resizeLetters (BufferedImage croppedImage, ArrayList<int[]> letterCoordinates, String inputFileName) {
