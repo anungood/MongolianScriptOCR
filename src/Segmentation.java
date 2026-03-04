@@ -10,10 +10,12 @@ import java.util.Arrays;
 public class Segmentation {
     public static void main(String[] args) {
         //load image file
-        String inputFileName = "dataset1.png";
+        String inputFileName = "dataset22.png";
         File file = new File(inputFileName);
+        ArrayList <int[]> letterCoordinates = new ArrayList<>();
         //Buffered Image object
         BufferedImage img = null;
+        BufferedImage wordOnlyImage = null;
         //Error Handling try-catch block to see if the file exists
         try {
             img = ImageIO.read(file);
@@ -27,45 +29,66 @@ public class Segmentation {
 
         //method to segment the word letter by letter
         int[] edgesCoordinates = detectWordSpace(img);
-        //crops the image to the detected coordinates
-        BufferedImage wordOnlyImage = crop(img, edgesCoordinates);
-        int spineColumn = findSpine(wordOnlyImage);
+
+        //crops the image to the detected word space if coordinates for pixels are detected
+        if (edgesCoordinates[0] == 0) {
+            System.out.println("There was no word detected in the image.");
+            System.exit(0); //The program is terminated if there is not black pixel detected
+        }
+        else {
+            wordOnlyImage = crop(img, edgesCoordinates);
+        }
+
+        //finds the coordinates of each column of words in the image
         ArrayList <int[]> columnCoordinates = segmentColumns(wordOnlyImage);
-        int numberOfColumns = columnCoordinates.size();
+        int columnCount = columnCoordinates.size();
+        int[] spineColumn = new int[columnCount];
+
+        //finds the overarching line the words are written for each column
+        for (int c = 0; c < columnCount; c++) {
+            System.out.println(Arrays.toString(columnCoordinates.get(c)));
+            spineColumn[c] = findSpine(wordOnlyImage, columnCoordinates.get(c));
+        }
+
+        for  (int s : spineColumn) {
+            System.out.println("Min Column");
+            System.out.println(s);
+        }
+
+        //finds the coordinates for every word in every column
         ArrayList<int[]> everyWordCoordinates = segmentWordsPerColumn(wordOnlyImage, columnCoordinates);
 
-        for (int c[] : everyWordCoordinates) {
-            System.out.println(Arrays.toString(c));
-        }
-        //int numberOfWords = everyWordCoordinates.size();
-        ArrayList <int[]> letterCoordinates = new ArrayList<>();
+        //counter variable to keep track of which column the words are in
+        int i =0;
         //calls the method to segment letters for each word
         for (int w = 0; w < everyWordCoordinates.size(); w++) {
-            System.out.println("Word: " + w);
-            System.out.println(Arrays.toString(everyWordCoordinates.get(w)));
             int[] eachWordCoordinates = everyWordCoordinates.get(w);
-            //how to save the letter coordinates and access it later? do i need to access it? or just keep the pics?
-            letterCoordinates.addAll(segmentLetters(wordOnlyImage, eachWordCoordinates, spineColumn));
+            //if the spine column is within the coordinates range for width of the word , the method is called
+            if (everyWordCoordinates.get(w)[0] < spineColumn[i] && spineColumn[i] < everyWordCoordinates.get(w)[2]) {
+                letterCoordinates.addAll(segmentLetters(wordOnlyImage, eachWordCoordinates, spineColumn[i]));
+            }
+            //or else, the next spine column is used to call the method for segmenting the words until it reaches its maximum
+            else if (everyWordCoordinates.get(w)[0] > spineColumn[i]) {
+                i++;
+                if(i < spineColumn.length) {
+                    letterCoordinates.addAll(segmentLetters(wordOnlyImage, eachWordCoordinates, spineColumn[i]));
+                }
+            }
+
         }
         //resize every letters and save images to prepare to feed it for the MLP
-        resizeLetters(wordOnlyImage, letterCoordinates, inputFileName);
+        //resizeLetters(wordOnlyImage, letterCoordinates, inputFileName);
     }
 
-    //display image in a JPanel popup
+    // display an image in a JPanel popup
     public static void display(BufferedImage img) {
         System.out.println("Displaying image.");
-        JFrame frame = new JFrame(); //main application window. Picture frame that holds
-        JLabel label = new JLabel(); //display text or images inside the container, JFrame
-        frame.setSize(img.getWidth(), img.getHeight()); //same size as the image
-        label.setIcon(new ImageIcon(img)); //sets an image on JLabel
-        //ImageIcon is a Swing class that wraps an image so Swing can display it
-        //new ImageIcon(img) → converts that image into a Swing-friendly icon
-        //label.setIcon(...) → tells the label: “show this image”
-        frame.getContentPane().add(label, BorderLayout.CENTER);
-        //Adds the JLabel to the main area of the JFrame
-        //.add(label, ...) → puts the label into that container
-        //BorderLayout.CENTER → places it in the center region
-        frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+        JFrame frame = new JFrame(); // main application window
+        JLabel label = new JLabel(); // display text or images inside the container of JFrame
+        frame.setSize(img.getWidth(), img.getHeight()); // makes the frame same size as the image
+        label.setIcon(new ImageIcon(img)); //sets an image on JLabel to display
+        frame.getContentPane().add(label, BorderLayout.CENTER); //makes the JLabel the center of JFrame
+        frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE); //frame will exit on close command
         frame.pack();
         frame.setVisible(true);
     }
@@ -73,66 +96,48 @@ public class Segmentation {
     //method to detect where the words are within the given image
     public static int[] detectWordSpace(BufferedImage img){
         //Variable Declarations
-        int width = img.getWidth();    // number of columns
+        int width = img.getWidth(); // number of columns
         int height = img.getHeight();  // number of rows
         ArrayList<Point> letterPixels = new ArrayList<>();
-        int threshold = 10;
-        ArrayList<Point> edgePixels = new ArrayList<>(); //will i use this?
+        int threshold = 10; // threshold to identify the darker pixel for the words
         int leftestWidth = img.getWidth(), lowestHeight = img.getHeight();
         int rightestWidth=0, highestHeight=0;
 
         //detecting letters in pure black and white environment
-        //black strokes should be less than or equal to 10
-        //0 is ideal
+        //black strokes should be less than or equal to 10; Value of 0 is ideal
         for (int x = 0; x < width; x++) {
             for (int y = 0; y < height; y++) {
                 int pixel = img.getRGB(x, y) & 0xff;
                 if (pixel <= threshold) {
-                    letterPixels.add(new Point(x,y));
+                    letterPixels.add(new Point(x,y)); // letterPixels will contain all (x, y) coordinates of black pixels
                 }
             }
-        }
-
-        // letterPixels now contains all (x, y) coordinates of black pixels
-        //printing the pixels in the word
-        for (int i= 0; i < letterPixels.size(); i++) {
-            Point p = letterPixels.get(i);
-            System.out.println("Total word pixels: " + letterPixels.get(i));
-            int x = p.x;
-            int y = p.y;
         }
 
         if (!letterPixels.isEmpty()) {
             //saving the leftest width (lowest)
             leftestWidth = letterPixels.getFirst().x;
 
-            for (int i= 0; i < letterPixels.size()-1; i++) {
+            for (int i= 0; i < letterPixels.size(); i++) {
                 //getting the highest height
                 if (highestHeight < letterPixels.get(i).y) {
                     highestHeight = letterPixels.get(i).y;
                 }
                 //getting the rightest width
-                //why is it less than 1
                 if (rightestWidth < letterPixels.get(i).x) {
-                    rightestWidth = letterPixels.get(i).x+1;
+                    rightestWidth = letterPixels.get(i).x;
                 }
+                //getting the lowest height
                 if (lowestHeight > letterPixels.get(i).y) {
                     lowestHeight = letterPixels.get(i).y;
                 }
             }
-
-            System.out.println(leftestWidth);
-            System.out.println(rightestWidth);
-            System.out.println(lowestHeight);
-            System.out.println(highestHeight);
-
-            // adding the edges to the Arraylist. Will I use this?
-            edgePixels.add(new Point(leftestWidth, lowestHeight));
-            edgePixels.add(new Point(leftestWidth, highestHeight));
-            edgePixels.add(new Point(rightestWidth, lowestHeight));
-            edgePixels.add(new Point(rightestWidth, highestHeight));
+            return new int[] {leftestWidth, lowestHeight, rightestWidth, highestHeight};
         }
-        return new int[] {leftestWidth, lowestHeight, rightestWidth, highestHeight};
+        //return empty array if there was no black pixel detected, assuming there isn't any word in the photo
+        else {
+            return new int[0];
+        }
     }
 
     //crops the input image into the given coordinates
@@ -155,24 +160,32 @@ public class Segmentation {
 
     //finds the main body line from the letters by calculating the column
     //that has the lowest value; how will i use this?
-    public static int findSpine(BufferedImage img) {
-        int width= img.getWidth();
-        int height = img.getHeight();
-        int[] colSums = new int[width];
+    public static int findSpine(BufferedImage img, int[] coords) {
+        // Variable Declarations
+        int startX = coords[0];
+        int startY = coords[1];
+        int endX = coords[2];
+        int endY = coords[3];
+        int width= endX - startX;
+        int height = endY - startY;
+        int[] colSums = new int[endX];
         int minColumnIndex = 0;
+
         //gets the sum for each column pixels
-        for (int x = 0; x < width; x++) {
-            for (int y = 0; y < height; y++) {
+        for (int x = startX; x < endX; x++) {
+            for (int y = startY; y < endY; y++) {
                 int pixel = img.getRGB(x, y) & 0xff;
                 //finds column sum for each column;
                 colSums[x] +=pixel;
                 }
+            //System.out.println("Column sum: "+ x + colSums[x]);
             }
-        //where to place this?
-        int minColumn = colSums[0];
+
+        int minColumn = colSums[startX]; //variable to hold the value of the minimum column sum which will have the most black pixels
+
         //finds the index for the column with the lowest value
-        for (int x = 0; x < width-1; x++) {
-            System.out.println(colSums[x]);
+        for (int x = startX; x < endX; x++) {
+            //System.out.println(colSums[x]);
             if (colSums[x] < minColumn) {
                 minColumn = colSums[x];
                 minColumnIndex = x;
@@ -251,7 +264,7 @@ public class Segmentation {
                 int[] segmentCoordinates = new int[]{transitions.get(i), 0, transitions.get(i + 1), height - 1};
                 //saves the x,y,width,height values
                 columnCoordinates.add(new int[]{transitions.get(i), 0, transitions.get(i + 1), height - 1});
-                //crop(img, segmentCoordinates);
+                crop(img, segmentCoordinates);
             }
         }
         //add the last column
@@ -291,7 +304,7 @@ public class Segmentation {
             }
             int maxRowValue = findMaxRowValue(horizontalSums);
 
-            //do smthing dynamic to find the segmentation of words?
+            //transition is added when there is change in pixel values between two rows and the latter turns fully white
             for (int y = 1; y < endY; y++) {
                 if ((Math.abs(horizontalSums[y-1] - horizontalSums[y]) > 0) && (horizontalSums[y] == maxRowValue)) {
                     transitions.add(y);
@@ -328,7 +341,7 @@ public class Segmentation {
         }
         return rowSum;
     }
-    //preprocess before doing the code so the white pixels are clearer
+
     //find the maximum row
     public static int findMaxRowValue (int[] rowSums) {
         int maxRowSum = 0;
@@ -344,9 +357,8 @@ public class Segmentation {
 
     //Segments the letter from cropped image by dividing the picture with 3 by width
     //and getting white spaces between each letter
-    public static ArrayList<int[]> segmentLetters(BufferedImage img, int[] eachWordCoordinates, int num) {
-        //use the int num to count the letters?
-        int numberOfWords = eachWordCoordinates.length;
+    public static ArrayList<int[]> segmentLetters(BufferedImage img, int[] eachWordCoordinates, int spineIndex) {
+        //Variable Declarations
         ArrayList<Integer> transitions = new ArrayList<>();
         transitions.add(0); //picture starts with 0 height
         int startX = eachWordCoordinates[0];
@@ -355,9 +367,11 @@ public class Segmentation {
         int endY = eachWordCoordinates[3];
 
         System.out.println("Word coordinates: " + startX + " " +  startY + " " + endX + " " + endY);
+        System.out.println("Spine: " + spineIndex);
         int width = endX - startX;
         int height = endY - startY;
-        int leftZoneEnd = width/2 + startX - width/8; //divides the picture's width into 3 to create some white space that will help with the segmentation
+        //MAKE THIS DYNAMIC!
+        int leftZoneEnd = startX + (spineIndex-startX) - (spineIndex-startX)/8; //divides the picture's width into 3 to create some white space that will help with the segmentation
         int[] horizontalSums = new int[endY];
         int maxRow = horizontalSums[0];
         ArrayList<int[]> letterCoordinates = new ArrayList<>(); //variable to save the coordinates of the letters
