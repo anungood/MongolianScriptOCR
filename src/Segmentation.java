@@ -6,11 +6,12 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-//maybe i should add gaussian blur?
+import java.util.Iterator;
+
 public class Segmentation {
     public static void main(String[] args) {
         //load image file
-        String inputFileName = "dataset22.png";
+        String inputFileName = "dataset6.png";
         File file = new File(inputFileName);
         ArrayList <int[]> letterCoordinates = new ArrayList<>();
         //Buffered Image object
@@ -41,9 +42,12 @@ public class Segmentation {
 
         //finds the coordinates of each column of words in the image
         ArrayList <int[]> columnCoordinates = segmentColumns(wordOnlyImage);
+        //remove empty columns
+        removeEmptyColumns(wordOnlyImage, columnCoordinates);
+
         int columnCount = columnCoordinates.size();
         int[] spineColumn = new int[columnCount];
-
+        System.out.println("Column count is: " + columnCount);
         //finds the overarching line the words are written for each column
         for (int c = 0; c < columnCount; c++) {
             System.out.println(Arrays.toString(columnCoordinates.get(c)));
@@ -60,7 +64,7 @@ public class Segmentation {
         trimWhiteSpace(wordOnlyImage, everyWordCoordinates);
 
         //counter variable to keep track of which column the words are in
-        int i =0;
+        int i = 0;
         //calls the method to segment letters for each word
         for (int w = 0; w < everyWordCoordinates.size(); w++) {
             int[] eachWordCoordinates = everyWordCoordinates.get(w);
@@ -78,7 +82,7 @@ public class Segmentation {
 
         }
         //resize every letters and save images to prepare to feed it for the MLP
-        //resizeLetters(wordOnlyImage, letterCoordinates, inputFileName);
+        // resizeLetters(wordOnlyImage, letterCoordinates, inputFileName);
     }
 
     // display an image in a JPanel popup
@@ -232,7 +236,7 @@ public class Segmentation {
             for (int y = 0; y < height; y++) {
                 int pixel = img.getRGB(x, y) & 0xff;
                 //finds column sum for each column
-                vertSums[x] +=pixel;
+                vertSums[x] += pixel;
             }
         }
 
@@ -276,13 +280,45 @@ public class Segmentation {
                 int[] segmentCoordinates = new int[]{transitions.get(i), 0, transitions.get(i + 1), height - 1};
                 //saves the x,y,width,height values
                 columnCoordinates.add(new int[]{transitions.get(i), 0, transitions.get(i + 1), height - 1});
-                //crop(img, segmentCoordinates);
+                crop(img, segmentCoordinates);
             }
         }
         System.out.println(("Finishing column coordinates"));
         return columnCoordinates;
     }
 
+    //removes empty columns by calculating the density and comparing it with the threshold
+    public static void removeEmptyColumns(BufferedImage img, ArrayList<int[]> columnCoordinates) {
+        double threshold = 0.005; //amount of density the columns should at least have
+        Iterator<int[]> iterator = columnCoordinates.iterator();
+        int height = img.getHeight();
+
+        while (iterator.hasNext()) {
+            int[] column = iterator.next();
+            int startX = column[0];
+            int endX = column[2];
+            int blackPixelCount = 0;
+            int width = endX - startX;
+
+            for (int x = startX; x < endX; x++) {
+                for (int y = 0; y < height; y++) {
+                    int rgb = img.getRGB(x, y) & 0xFF;
+
+                    if (rgb < 10) { //detect black pixel
+                        blackPixelCount++;
+                    }
+                }
+            }
+
+            double density = blackPixelCount / (double)(width * height);
+            System.out.println("Column density: " + density);
+            //remove column if density is lower than the threshold
+            if (density < threshold) {
+                iterator.remove();
+            }
+
+        }
+    }
     //method to find the word coordinates by using the row sum
     public static ArrayList<int[]> segmentWordsPerColumn(BufferedImage img, ArrayList <int[]> columnCoordinates) {
         //variable to keep track of the transitions
@@ -306,10 +342,6 @@ public class Segmentation {
             transitions.add(startY);
             System.out.println(startX + " " + startY + " " + endX + " " + endY);
             int[] horizontalSums = findRowSum(img, startX, startY, endX, endY);
-            //displaying the values
-            for (int h = 0; h < horizontalSums.length; h++) {
-                System.out.println("Row " + h + " is " + horizontalSums[h]);
-            }
             int maxRowValue = findMaxRowValue(horizontalSums);
 
             //transition is added when there is change in pixel values between two rows and the latter turns fully white
@@ -375,7 +407,7 @@ public class Segmentation {
 
         ArrayList<int[]> letterCoordinates = new ArrayList<>(); //variable to save the coordinates of the letters
         //Dynamic way to cut the words to create white space by using where the spine of words are
-        int leftZoneEnd = startX + (spineIndex-startX) - (spineIndex-startX)/8;
+        int leftZoneEnd = spineIndex- (spineIndex-startX)/5;
 
         //displays the original image
         int[] originalWord = new int[] {startX, startY, endX, endY};
@@ -485,7 +517,7 @@ public class Segmentation {
 
             //save the image into a folder-> need to have dynamic folder name
             //inside the main folder so each attempt on the app is saved separately
-            File outputFile = new File(folder, "letter_" + i + ".png");
+            File outputFile = new File(folder, "letter__" + i + ".png");
             try {
                 //Saves the BufferedImage into a png file
                 ImageIO.write(resizedLetter, "png", outputFile);
