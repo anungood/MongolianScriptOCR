@@ -1,6 +1,5 @@
 //Store weights, bias, compute weighted sum of each neurons.
 //Apply activation function
-import java.util.Arrays;
 import java.util.Random;
 
 public class Neuron {
@@ -51,7 +50,6 @@ public class Neuron {
     // make any input value between 0 and 1
     //makes it non-linear: output=σ(z)
     private double sigmoid(double x) {
-
         return 1.0 / (1.0 + Math.exp(-x));
     }
 
@@ -60,18 +58,25 @@ public class Neuron {
         return previousOutput * (1 - previousOutput);
     }
 
-    //update weights after calculation
-    public void updateWeights(double error, double learningRate) {
+    //backward propagation method to compute error, store the error of the
+    //previous layer, update weight and bias
+    public double[] backward(double error, double learningRate) {
         //compute delta = error * sigmoid derivative
         double delta = error * sigmoidDerivative();
 
-        //w_i = w_i - learningRate * delta * last input
-        for (int i = 0; i < weights.length; i++) {
-            weights[i] = weights[i] - learningRate * delta * previousInputs[i];
-        }
+        //array to store error for previous layer
+        double[] previousErrors = new double[weights.length];
 
+        for (int i = 0; i < weights.length; i++) {
+            // calculate error contribution to previous neuron
+            previousErrors[i] = delta * weights[i];
+            //update weight after calculation
+            weights[i]-= learningRate * delta * previousInputs[i];
+        }
         //update bias
         bias -= learningRate * delta;
+
+        return previousErrors;
     }
 
     //getters and setters

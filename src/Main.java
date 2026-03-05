@@ -56,7 +56,7 @@ public class Main {
             //calculating error
             double error = output - target;
             //update weights with the error
-            neuron.updateWeights(error, learningRate);
+            neuron.backward(error, learningRate);
             //print output
             if (epoch % 100 == 0) {
                 System.out.println("Epoch " + epoch + " Output: " + output);

@@ -82,7 +82,7 @@ public class Segmentation {
 
         }
         //resize every letters and save images to prepare to feed it for the MLP
-        // resizeLetters(wordOnlyImage, letterCoordinates, inputFileName);
+        resizeLetters(wordOnlyImage, letterCoordinates, inputFileName);
     }
 
     // display an image in a JPanel popup
