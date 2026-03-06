@@ -22,20 +22,40 @@ public class MLP {
         layers[layers.length - 1] = new Layer(outputNeurons, previousLayerSize);
     }
 
-    //does forward propagation for all tha layers and neurons
+    //does forward propagation for each layer except the output layer
+    //because output layer uses softmax
     public double[] forward(double[] input) {
-        System.out.println("MLP class's forward method");
         double[] output = input;
 
-        for (Layer layer : layers) {
-            output = layer.forward(output);
+        for (int i = 0; i < layers.length; i++) {
+            //applies the activation function with sigmoid if it is not the output layer
+            boolean applyActivation = (i != layers.length - 1);
+            output = layers[i].forward(output, applyActivation);
         }
         return output;
     }
 
+    //backward propagation for the MLP
+    public void backward(double[] predicted, double[] target, double learningRate) {
+        //compute error at output layer
+        double[] errors = new double[predicted.length];
+
+        for (int i = 0; i < predicted.length; i++) {
+            //error = predicted - target
+            errors[i] = predicted[i] - target[i];
+        }
+
+        //propagate error backward through all layers
+        for (int i = layers.length - 1; i >= 0; i--) {
+            //start from last layer and move backward
+            boolean isOutputLayer = (i == layers.length - 1);
+
+            errors = layers[i].backward(errors, learningRate, isOutputLayer);
+        }
+    }
+
     //softmax function to turn the output into probabilities for each letter
     public static double[] softmax(double[] output) {
-        System.out.println("MLP class's softmax method");
         //variable declarations
         double max = output[0];
         double sum = 0.0;

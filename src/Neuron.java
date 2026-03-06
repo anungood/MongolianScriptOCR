@@ -13,7 +13,6 @@ public class Neuron {
 
     // constructor with the input size
     public Neuron(int inputSize) {
-        System.out.println("Inside neuron class");
         weights = new double[inputSize];
 
         // assigning random weights for each neurons with the random function
@@ -21,29 +20,11 @@ public class Neuron {
             //nextDouble() gives random number between 0 (included) and 1 (not included)
             //multiplying by 2 and minusing 1 makes the number between -1 and 1
             //assigns positive and negative weights
-            weights[i] = rand.nextDouble() * 2 - 1; // range: -1 to 1
-            System.out.println("Weight " + i + " " + weights[i]);
+            weights[i] = (rand.nextDouble() -0.5) * 0.1; // range: -0.5 to 0.5
         }
-        //assigns random number for bias that is between -1 and 1
-        bias = rand.nextDouble() * 2 - 1;
+        //assigns random number for bias that is between -0.5 and 0.5
+        bias = (rand.nextDouble() -0.5) * 0.1;
 
-    }
-
-    //forward pass to calculate z= weights*inputs+ bias
-    public double forward(double[] inputs) {
-        System.out.println("Inside neuron class's forward method");
-        double sum = 0.0;
-        //saving the inputs as it will be useful for backprop
-        previousInputs = inputs.clone();
-
-        //finding the sum of weights * inputs and bias
-        for (int i= 0; i < weights.length; i++) {
-            sum+= weights[i] * inputs[i];
-        }
-        sum+= bias;
-        //saving the output as it will useful for backprop
-        previousOutput = sigmoid(sum);
-        return previousOutput;
     }
 
     // activation function: sigmoid(x) → 1 / (1 + e^-x)
@@ -53,25 +34,57 @@ public class Neuron {
         return 1.0 / (1.0 + Math.exp(-x));
     }
 
+    //forward pass for every neuron
+    public double forward(double[] inputs, boolean useActivation) {
+        //z: variable to hold the sum of weighted sum+bias
+        double sum = 0.0;
+        //saving the inputs as it will be useful for backprop
+        previousInputs = inputs.clone();
+
+        //calculates z= weights*inputs + bias
+        for (int i = 0; i < weights.length; i++) {
+            sum += weights[i] * inputs[i];
+        }
+        sum += bias;
+
+        //applies sigmoid function if it is not the output layer
+        if (useActivation) {
+            previousOutput = sigmoid(sum);
+        } else {
+            previousOutput = sum;
+        }
+        //returns value between 0 and 1 for hidden layers and raw numbers for output layer
+        return previousOutput;
+    }
+
     //derivative of sigmoid function
     public double sigmoidDerivative() {
         return previousOutput * (1 - previousOutput);
     }
 
-    //backward propagation method to compute error, store the error of the
-    //previous layer, update weight and bias
-    public double[] backward(double error, double learningRate) {
-        //compute delta = error * sigmoid derivative
-        double delta = error * sigmoidDerivative();
+    //backward propagation for each neuron
+    public double[] backward(double error, double learningRate, boolean useDerivative) {
+        double delta;
 
-        //array to store error for previous layer
+        if (useDerivative) {
+            //calculates delta = error * sigmoid'(z)
+            //adjusted error
+            delta = error * sigmoidDerivative();
+        } else {
+            //the output layer uses softmax and cross entropy so no need to apply the derivative
+            delta = error;
+        }
+
+        //stores errors for the previous layer’s neurons
         double[] previousErrors = new double[weights.length];
-
+        //propagate error to previous layer BEFORE updating weights
         for (int i = 0; i < weights.length; i++) {
-            // calculate error contribution to previous neuron
             previousErrors[i] = delta * weights[i];
-            //update weight after calculation
-            weights[i]-= learningRate * delta * previousInputs[i];
+        }
+
+        //update weights (gradient descent)
+        for (int i = 0; i < weights.length; i++) {
+            weights[i] -= learningRate * delta * previousInputs[i];
         }
         //update bias
         bias -= learningRate * delta;
