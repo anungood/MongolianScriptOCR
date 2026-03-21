@@ -82,7 +82,7 @@ public class Segmentation {
 
         }
         //resize every letters and save images to prepare to feed it for the MLP
-        resizeLetters(wordOnlyImage, letterCoordinates, inputFileName);
+        //resizeLetters(wordOnlyImage, letterCoordinates, inputFileName);
     }
 
     // display an image in a JPanel popup
@@ -235,6 +235,7 @@ public class Segmentation {
         for (int x = 0; x < width; x++) {
             for (int y = 0; y < height; y++) {
                 int pixel = img.getRGB(x, y) & 0xff;
+
                 //finds column sum for each column
                 vertSums[x] += pixel;
             }
@@ -407,7 +408,7 @@ public class Segmentation {
 
         ArrayList<int[]> letterCoordinates = new ArrayList<>(); //variable to save the coordinates of the letters
         //Dynamic way to cut the words to create white space by using where the spine of words are
-        int leftZoneEnd = spineIndex- (spineIndex-startX)/5;
+        int leftZoneEnd = spineIndex - (spineIndex-startX)/5;
 
         //displays the original image
         int[] originalWord = new int[] {startX, startY, endX, endY};
@@ -530,199 +531,3 @@ public class Segmentation {
 
 }
 
-
-/**
- * public static void resizeLetters (BufferedImage croppedImage, ArrayList<int[]> letterCoordinates, String inputFileName) {
- *         int targetWidth = 30;
- *         int targetHeight = 20;
- *         String extractedInputName = inputFileName;
- *         String outputFolder = "output";
- *
- *
- *         //gets the index of where the dot is placed inside the input file name to cut the word
- *         int cutIndex = inputFileName.lastIndexOf('.');
- *         //cuts the input filename to where the dot is placed
- *         if (cutIndex > 0) {
- *             extractedInputName = inputFileName.substring(0, cutIndex);
- *         }
- *
- *         //creates a folder to save the output
- *         //do a try and catch block to get exceptions
- *         File folder = new File(outputFolder, extractedInputName);
- *         if (!folder.exists()) {
- *             folder.mkdirs();
- *         }
- *
- *         //just diplaying coordinates
- *         for (int[] coords : letterCoordinates) {
- *             System.out.println(Arrays.toString(coords));
- *         }
- *         //separate image for the letter
- *         for (int i=0; i<letterCoordinates.size(); i++) {
- *             int width = letterCoordinates.get(i)[2]-letterCoordinates.get(i)[0];
- *             int height =  letterCoordinates.get(i)[3]- letterCoordinates.get(i)[1];
- *
- *             //displaying segmented letters
- *             BufferedImage letter = croppedImage.getSubimage(letterCoordinates.get(i)[0], letterCoordinates.get(i)[1],
- *                     width, height);
- *             display(letter);
- *
- *             //calculating scaling value
- *             double scale = Math.min( (double) targetWidth / width,
- *                     (double) targetHeight / height
- *             );
- *
- *             //calculating updated width and height to resize
- *             int scaledWidth = (int) Math.round(width * scale);
- *             int scaledHeight = (int) Math.round(height * scale);
- *             //creates an image with the size of the scaled width and scaled height
- *             BufferedImage scaledImage = new BufferedImage(
- *                     scaledWidth, scaledHeight, BufferedImage.TYPE_BYTE_GRAY
- *             );
- *             display(scaledImage);
- *
- *             //writes the letter into the resized image using Graphics2D tool
- *             Graphics2D gScaled = scaledImage.createGraphics();
- *             gScaled.drawImage(letter, 0, 0, scaledWidth, scaledHeight, null);
- *             gScaled.dispose();
- *             //padding canvas to reach the target width and target height
- *             BufferedImage resizedLetter = new BufferedImage(
- *                     targetWidth, targetHeight, BufferedImage.TYPE_BYTE_GRAY
- *             );
- *
- *             //fills the empty canvas with white pixels
- *             Graphics2D gOut = resizedLetter.createGraphics();
- *             gOut.fillRect(0, 0, targetWidth, targetHeight);
- *
- *             //how much space to leave when writing the image in order to make it center
- *             int xSpace = (targetWidth - scaledWidth) / 2;
- *             int ySpace = (targetHeight - scaledHeight) / 2;
- *
- *             gOut.drawImage(scaledImage, xSpace, ySpace, null);
- *             gOut.dispose();
- *             display(resizedLetter);
- *
- *             //save the image into a folder-> need to have dynamic folder name
- *             //inside the main folder so each attempt on the app is saved separately
- *             File outputFile = new File(folder, "letter_" + i + ".png");
- *             try {
- *                 //Saves the BufferedImage into a png file
- *                 ImageIO.write(resizedLetter, "png", outputFile);
- *             } catch (IOException e) {
- *                 e.printStackTrace();
- *             }
- *
- *         }
- *
- *
- *     }
- */
-/**
- for (int num : colSums) {
- System.out.println(num);
- }
- **/
-// print column sums
-// System.out.println("Sum of column " + x + ": " + colSums[x]);
-
-//detect transition zone by comparing it with the threshold value
-//0- black; 255-white
-
-/**
-ArrayList<Integer> transitionCols = new ArrayList<>();
-boolean wordExists = false;
-int threshold = 50; // tweak depending on your image
-
-        for (int x = 0; x < width; x++) {
-        if (colSums[x] > threshold && !wordExists) {
-// start of a stroke/word
-wordExists = true;
-        transitionCols.add(x); // store start column
-            } else if (colSums[x] <= threshold && wordExists) {
-// end of a stroke/word
-wordExists = false;
-        transitionCols.add(x); // store end column
-            }
-                    }
-
-**/
-//threshold to detect transition zone
-
-//detecting the column with the lowest value to determine where the words are written
-//what if there are multiple columns? -> find transition zone
-
-/**
- //gets sum of columns to determine where the letter exists
- //used for gradient decent?
- for (int x = 0; x < width; x++) {       // loop columns
- for (int y = 0; y < height; y++) {  // loop rows
- colSums[x] += img.getRGB(x, y) & 0xFF;
- }
- }
-
- for (int x = 0; x < width; x++) {
- //find max value column in the picture to know where the white spaces are
- if (colSums[x] > maxVal) {
- maxVal = colSums[x];
- }
- }
- //detecting the whitest space in the picture to cut it?
- System.out.println("Max Value of Columns " + maxVal);
-
- for (int i= 0; i < letterPixels.size(); i++) {
- Point p = letterPixels.get(i);
- System.out.println("Total dark pixels: " + letterPixels.get(i));
- int x = p.x;
- int y = p.y;
- }
-
- edgePixels.add(letterPixels.getFirst());
- for (int i= 0; i < letterPixels.size()-1; i++) {
- if ((Math.abs(letterPixels.get(i).x - letterPixels.get(i+1).x) > 1) &&
- (Math.abs(letterPixels.get(i).y - letterPixels.get(i+1).y) > 1)) {
- edgePixels.add(letterPixels.get(i));
- System.out.println(letterPixels.get(i));
- }
- }
- **/
-
-//letterEdges[1] = letterPixels.getFirst().y;
-//saving the leftest width
-//edgePixels.add(letterPixels.getFirst());
-// letters.add(letterCorners);
-
-/**
- //saves the changes of value between rows to an array
- for (int y = 0; y < height - 1; y++) {
- diff[y] = Math.abs(vertSums[y + 1] - vertSums[y]);
- }
-
-
- for (int y = 2; y < height - 1; y++) {
- if ((vertSums[y-2] - vertSums[y - 1] > 0)  && (vertSums[y] - vertSums[y + 1] == 0))  {
- transitions.add(y);
- }
- }
- **/
-/**
- for (int y = 2; y < diff.length; y++) {
- if ((diff[y-1] - diff [y-2] > 0) && (diff[y] == 0)) {
- transitions.add(y);
- }
- }
- **/
-
-/**
- for (int d : diff) mean += d;
- mean /= diff.length;
- double threshold = mean * 2;
- System.out.println(threshold);
- //find the transition zone by seeing the changes of value compared with
- //the next row
-
- for (int y = 0; y < diff.length; y++) {
- if (diff[y] > threshold) {
- transitions.add(y);
- }
- }
- **/

@@ -4,7 +4,6 @@ public class MLP {
     private Layer[] layers;
 
     //Construction that take layer sizes as arguments
-    //how much hidden layers to have? 1?
     public MLP(int inputSize, int[] hiddenLayerNeurons, int outputNeurons) {
         System.out.println("Inside MLP class");
         //saves the input layer size
@@ -41,7 +40,6 @@ public class MLP {
         double[] errors = new double[predicted.length];
 
         for (int i = 0; i < predicted.length; i++) {
-            //error = predicted - target
             errors[i] = predicted[i] - target[i];
         }
 
@@ -49,7 +47,6 @@ public class MLP {
         for (int i = layers.length - 1; i >= 0; i--) {
             //start from last layer and move backward
             boolean isOutputLayer = (i == layers.length - 1);
-
             errors = layers[i].backward(errors, learningRate, isOutputLayer);
         }
     }
