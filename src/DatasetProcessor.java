@@ -111,8 +111,7 @@ public class DatasetProcessor {
         for (File folder : folders) {
             //folder name
             String folderName = folder.getName();
-
-            //unique letters
+            //getting unique letters
             String letter = folderName.split("_")[0];
 
             //count all image files in the folder

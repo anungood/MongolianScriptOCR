@@ -6,7 +6,6 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Iterator;
 
 public class Segmentation {
     public static void main(String[] args) {
@@ -49,39 +48,36 @@ public class Segmentation {
         //finds the overarching line the words are written for each column
         for (int c = 0; c < columnCount; c++) {
             System.out.println(Arrays.toString(columnCoordinates.get(c)));
-            connectionLineIndex[c] = findConnectionLine(wordOnlyImage, columnCoordinates.get(c));
+            connectionLineIndex[c] = findConnectionLine(binarizedImage, columnCoordinates.get(c));
         }
-        /**
+
         for  (int s : connectionLineIndex) {
             System.out.println("Min Column");
             System.out.println(s);
         }
 
         //finds the coordinates for every word in every column
-        ArrayList<int[]> everyWordCoordinates = segmentWordsPerColumn(wordOnlyImage, columnCoordinates);
-        trimWhiteSpace(wordOnlyImage, everyWordCoordinates);
+        ArrayList<int[]> everyWordCoordinates = segmentWordsPerColumn(binarizedImage, columnCoordinates);
 
         //counter variable to keep track of which column the words are in
         int i = 0;
         //calls the method to segment letters for each word
         for (int w = 0; w < everyWordCoordinates.size(); w++) {
             int[] eachWordCoordinates = everyWordCoordinates.get(w);
-            //if the spine column is within the coordinates range for width of the word , the method is called
+            //if the connection line is within the coordinates range for width of the word, the method is called
             if (everyWordCoordinates.get(w)[0] < connectionLineIndex[i] && connectionLineIndex[i] < everyWordCoordinates.get(w)[2]) {
                letterCoordinates.addAll(segmentLetters(wordOnlyImage, eachWordCoordinates, connectionLineIndex[i]));
             }
-            //or else, the next spine column is used to call the method for segmenting the words until it reaches its maximum
+            //or else, the next connection line is used to call the method for segmenting the words until it reaches its maximum
             else if (everyWordCoordinates.get(w)[0] > connectionLineIndex[i]) {
                 i++;
                 if(i < connectionLineIndex.length) {
                    letterCoordinates.addAll(segmentLetters(wordOnlyImage, eachWordCoordinates, connectionLineIndex[i]));
                 }
             }
-
         }
         //resize every letters and save images to prepare to feed it for the MLP
         //resizeLetters(wordOnlyImage, letterCoordinates, inputFileName);
-         **/
     }
 
     // display an image in a JPanel popup
@@ -102,7 +98,7 @@ public class Segmentation {
         //Variable Declarations
         int width = img.getWidth(); // number of columns
         int height = img.getHeight();  // number of rows
-        int threshold = 50; // threshold to identify the darker pixel for the words
+        int threshold = 120; // threshold to identify the darker pixel for the words
         int leftestWidth = width;
         int highestHeight = 0;
         int rightestWidth = 0;
@@ -143,8 +139,8 @@ public class Segmentation {
 
         for (int y = 0; y < img.getHeight(); y++) {
             for (int x = 0; x < img.getWidth(); x++) {
-                rgb = (int) (img.getRGB(x, y)); //get the rgb value of each pixels
-                //seperate red, green, and blue through shift operation
+                rgb = (img.getRGB(x, y)); //get the rgb value of each pixel
+                //separate red, green, and blue through shift operation
                 //bit manipulation to extract RGB components from a single integer pixel value in Java
                 r = ((rgb >> 16) & 0xFF);
                 g = ((rgb >> 8) & 0xFF);
@@ -159,7 +155,7 @@ public class Segmentation {
                 } else {
                     value = 0; //pure black pixel value
                 }
-                int newRGB;
+
                 //overriding the rgb value with shifted value
                 rgb = (255 << 24) | (value << 16) | (value << 8) | value;
                 //setting the rgb value to the new value
@@ -167,34 +163,6 @@ public class Segmentation {
             }
         }
         return binarizedImage;
-    }
-
-    //Method to cut the white space before the start of each words
-    public static void trimWhiteSpace( BufferedImage img, ArrayList<int[]> wordCoordinates) {
-        for (int[] word : wordCoordinates) {
-            int startX = word[0];
-            int startY = word[1];
-            int endX = word[2];
-            int endY = word[3];
-            int threshold = 10;
-            int newTop = endY;
-
-            //black strokes should be less than or equal to 10; Value of 0 is ideal
-            for (int x = startX; x < endX; x++) {
-                for (int y = startY; y < endY; y++) {
-                    int pixel = img.getRGB(x, y) & 0xff;
-                    if (pixel <= threshold) {
-                        if (y < newTop) { //if the value of y of a black pixel is less than the variable, the variable is updated
-                            newTop = y;
-                        }
-                    }
-                }
-            }
-            //if the new top variables is less than the current top variable, the startY is updated to trim the white space
-            if (newTop < endY) {
-                word[1] = newTop;
-            }
-        }
     }
 
     //crops the input image into the given coordinates
@@ -208,15 +176,12 @@ public class Segmentation {
     }
 
     //finds the main body line from the letters by calculating the column
-    //that has the lowest value; how will i use this?
     public static int findConnectionLine(BufferedImage img, int[] columnCoordinate) {
         // Variable Declarations
         int startX = columnCoordinate[0];
         int startY = columnCoordinate[1];
         int endX = columnCoordinate[2];
         int endY = columnCoordinate[3];
-        int width= endX - startX;
-        int height = endY - startY;
         int[] colSums = new int[endX];
         int minColumnIndex = startX; //variable to save the index for the lowest column value
 
@@ -249,9 +214,8 @@ public class Segmentation {
         int width = img.getWidth();
         int height = img.getHeight();
         int[] vertSums = new int[width];
-        int maxColumn = vertSums[0];
 
-        //find sum of the columns
+        //find the vertical projection profile by summing the count of black pixels
         for (int x = 0; x < width; x++) {
             int sum = 0;
             for (int y = 0; y < height; y++) {
@@ -291,7 +255,7 @@ public class Segmentation {
         System.out.println(transitions);
 
         //if no transition was added it will return the image
-        if (transitions.size() == 0) columnCoordinates.add(new int[]{0, 0, width, height});
+        if (transitions.isEmpty()) columnCoordinates.add(new int[]{0, 0, width, height});
         else {
             //displays the cropped columns and saves the coordinates to an int[] arraylist
             for (int i = 0; i < transitions.size(); i +=2 ) {
@@ -306,129 +270,128 @@ public class Segmentation {
         return columnCoordinates;
     }
 
-    //method to find the word coordinates by using the row sum
+    //method to segment the words within each column
     public static ArrayList<int[]> segmentWordsPerColumn(BufferedImage img, ArrayList <int[]> columnCoordinates) {
-        //variable to keep track of the transitions
-        System.out.println("Starting segmenting words " + columnCoordinates.size() );
-        ArrayList<Integer> transitions = new ArrayList<>();
-        ArrayList<int[]> wordCoordinates = new ArrayList<>();
+        ArrayList<int[]> wordCoordinates = new ArrayList<>(); //variable to save the word coordinates
 
-        for (int[] arr : columnCoordinates) {
-            System.out.println(Arrays.toString(arr));
-        }
-
-        //maybe like make a general method for finding row sums bcs it is so redundant
+        //looping each column
         for (int i = 0; i < columnCoordinates.size(); i++) {
             int[] coords = columnCoordinates.get(i);
-            //each column starts with 0 height
-            //saves the needed variables for each column
+            //getting coordinates for each column
             int startX = coords[0];
             int startY = coords[1];
             int endX = coords[2];
             int endY = coords[3];
-            transitions.add(startY);
+            boolean wordFound= false;
+            int wordStart = 0;
             System.out.println(startX + " " + startY + " " + endX + " " + endY);
-            int[] horizontalSums = findRowSum(img, startX, startY, endX, endY);
-            int maxRowValue = findMaxRowValue(horizontalSums);
+            //finds the Horizontal Projection Profile
+            int[] hppSums = findHPP(img, startX, startY, endX, endY);
 
             //transition is added when there is change in pixel values between two rows and the latter turns fully white
-            for (int y = 1; y < endY; y++) {
-                if ((Math.abs(horizontalSums[y-1] - horizontalSums[y]) > 0) && (horizontalSums[y] == maxRowValue)) {
-                    transitions.add(y);
+            for (int y = 1; y < hppSums.length ; y++) {
+                //word starts when hpp has a value over 0
+                if (!wordFound && hppSums[y] > 0) {
+                    wordFound = true;
+                    wordStart = y;
+                }
+                //word ends when hpp equals 0
+                if (wordFound && hppSums[y] == 0) {
+                    wordFound = false;
+                    //saves the segmented word coordinates
+                    int[] segmentCoordinates = new int[]{
+                            startX,
+                            startY + wordStart,
+                            endX,
+                            startY + y
+                    };
+                    wordCoordinates.add(segmentCoordinates); //adds each word coordinates to the arraylist
+                    crop(img, segmentCoordinates);
                 }
             }
 
-            System.out.println("Transition: " + transitions);
-
-            for (int t = 0; t < transitions.size()-1; t++) {
-                int[] segmentCoordinates = new int[] {startX, transitions.get(t), endX, transitions.get(t+1)};
-                //saves the x,y,width,height values
-                wordCoordinates.add(new int[] {startX, transitions.get(t), endX, transitions.get(t+1)});
+            //if the word continues until the end of the column, add the transition until endY
+            if (wordFound) {
+                int[] segmentCoordinates = new int[] {
+                        startX,
+                        startY + wordStart,
+                        endX,
+                        endY
+                };
+                wordCoordinates.add(segmentCoordinates); //adds to the arraylist that keeps all the word coordinates
                 crop(img, segmentCoordinates);
             }
-            transitions.clear();
         }
         return wordCoordinates;
     }
 
-    //find the sum of pixel values in rows
-    public static int[] findRowSum (BufferedImage img, int x, int y, int x2, int y2) {
-        int[] rowSum = new int[y2];
+    //find horizontal projection profile for each row in the image
+    public static int[] findHPP (BufferedImage img, int startX, int startY, int endX, int endY) {
+        int height = endY - startY;
+        int[] hpp = new int[height];
 
-        for (int h = y; h < y2; h++) {
-            for (int w = x; w < x2; w++) {
-                int pixel = img.getRGB(w, h) & 0xff;
-                //finds row sum for each row
-                rowSum[h] += pixel;
+        for (int y = startY; y < endY; y++) {
+            int count = 0;
+            for (int x = startX; x < endX; x++) {
+                int pixel = img.getRGB(x, y);
+                int gray = pixel & 0xFF;
+                if (gray <= 50) { //increase the count if the pixel value is close to black
+                    count++;
+                }
             }
+            hpp[y - startY] = count;
         }
-        return rowSum;
+        return hpp;
     }
 
-    //find the maximum row
-    public static int findMaxRowValue (int[] rowSums) {
-        int maxRowSum = 0;
-
-        for (int i = 1; i < rowSums.length; i++) {
-            if (rowSums[i] > maxRowSum) {
-                maxRowSum = rowSums[i];
-            }
-        }
-
-        return maxRowSum;
-    }
-
-    //Segments the letter from cropped image by dividing the picture with 3 by width
-    //and getting white spaces between each letter
-    public static ArrayList<int[]> segmentLetters(BufferedImage img, int[] eachWordCoordinates, int spineIndex) {
+    //segments every letter in each word using the connection line
+    public static ArrayList<int[]> segmentLetters(BufferedImage img, int[] eachWordCoordinates, int connectionLineIndex) {
         //Variable Declarations
-        ArrayList<Integer> transitions = new ArrayList<>();
         int startX = eachWordCoordinates[0];
         int startY = eachWordCoordinates[1];
         int endX = eachWordCoordinates[2];
         int endY = eachWordCoordinates[3];
-        transitions.add(startY);
-
-        System.out.println("Word coordinates: " + startX + " " +  startY + " " + endX + " " + endY);
-        System.out.println("Spine: " + spineIndex);
-
         ArrayList<int[]> letterCoordinates = new ArrayList<>(); //variable to save the coordinates of the letters
-        //Dynamic way to cut the words to create white space by using where the spine of words are
-        int leftZoneEnd = spineIndex - (spineIndex-startX)/5;
+        ArrayList<Integer> transitions = new ArrayList<>();
 
-        //displays the original image
-        int[] originalWord = new int[] {startX, startY, endX, endY};
-        crop(img, originalWord);
+        //dynamic way to cut the words to create white space between letters by using where the connection line is
+        int leftZoneEnd = connectionLineIndex - (connectionLineIndex - startX)/4;
+        //find horizontal projection line within the left zone of the word
+        int[] hppSum = findHPP(img, startX, startY, leftZoneEnd, endY);
 
-        //displays the divided image
-        int[] leftZone = new int[] {startX, startY, leftZoneEnd, endY};
-        crop(img,leftZone);
+        //first letter always starts at the top of the word
+        if (hppSum.length > 0) {
+            transitions.add(startY);
+        }
 
-        //find vertical sum to find where the white spaces are after the image is divided to for clear segmentation between letters
-        int[] horizontalSums = findRowSum(img, startX, startY, leftZoneEnd, endY);
-        int maxRow = findMaxRowValue(horizontalSums);
-
-        System.out.println("Max row: " + maxRow);
-
-        //finds the transition zone by checking if there is change between rows and if the row becomes fully white later
-        for (int y = startY + 1 ; y < endY - 1; y++) {
-            if ((Math.abs(horizontalSums[y-1] - horizontalSums[y]) > 0) && (horizontalSums[y] == maxRow)) {
-                transitions.add(y);
+        //loop over the hpp values and find the transition zone
+        for (int i = 1; i < hppSum.length - 1; i++) {
+            //transition is added when black pixel row turns to fully white
+            if (hppSum[i] == 0 && Math.abs(hppSum[i] - hppSum[i-1]) > 0) {
+                transitions.add(startY + i + 1);
             }
         }
 
-        System.out.println(transitions);
-
-        //displays the cropped letters and saves the coordinates to an int[] arraylist
-        for (int i = 0; i < transitions.size()-1; i++) {
-            int[] segmentCoordinates = new int[] {startX, transitions.get(i), endX, transitions.get(i+1)};
-            //saves the x,y,width,height values
-            letterCoordinates.add(new int[] {startX, transitions.get(i), endX, transitions.get(i+1)});
-            crop(img, segmentCoordinates);
-
+        int minHeight = 5; //threshold for whether or not to include the transition or not
+        int lastStart = transitions.getLast();
+        if (endY - lastStart < minHeight && transitions.size() > 1) {
+            //merge with previous transition if the transition length is too short
+            transitions.set(transitions.size() - 1, endY);
+        } else if (lastStart < endY) {
+            transitions.add(endY);
         }
 
-        transitions.clear();
+        //adds the transitions to the letter coordinates; the end of the letter becomes the start of the next letter
+        for (int i = 0; i < transitions.size() - 1; i++) {
+            int start = transitions.get(i);
+            int end = transitions.get(i + 1);
+
+            if (end - start >= minHeight) { //transitions must be longer than the minimum height to avoid having small segments
+                int[] segmentCoordinates = new int[] { startX, start, endX, end };
+                letterCoordinates.add(segmentCoordinates);
+                crop(img, segmentCoordinates);
+            }
+        }
         return letterCoordinates;
     }
 
@@ -453,7 +416,7 @@ public class Segmentation {
             folder.mkdirs();
         }
 
-        //just diplaying coordinates
+        //just displaying coordinates
         for (int[] coords : letterCoordinates) {
             System.out.println(Arrays.toString(coords));
         }
@@ -547,5 +510,77 @@ public static void removeEmptyColumns(BufferedImage img, ArrayList<int[]> column
             iterator.remove();
         }
     }
+}
+
+
+//method to find the word coordinates by using the row sum
+public static ArrayList<int[]> segmentWordsPerColumn(BufferedImage img, ArrayList <int[]> columnCoordinates) {
+    System.out.println("Starting segmenting words " + columnCoordinates.size());
+    ArrayList<Integer> transitions = new ArrayList<>(); //variable to keep track of the word transitions
+    ArrayList<int[]> wordCoordinates = new ArrayList<>(); //variable to save the word coordinates
+
+    for (int[] arr : columnCoordinates) {
+        System.out.println(Arrays.toString(arr));
+    }
+
+    //maybe like make a general method for finding row sums bcs it is so redundant
+    for (int i = 0; i < columnCoordinates.size(); i++) {
+        int[] coords = columnCoordinates.get(i);
+        //each column starts with 0 height
+        //saves the needed variables for each column
+        int startX = coords[0];
+        int startY = coords[1];
+        int endX = coords[2];
+        int endY = coords[3];
+        transitions.add(startY);
+        System.out.println(startX + " " + startY + " " + endX + " " + endY);
+        int[] horizontalSums = findRowSum(img, startX, startY, endX, endY);
+        int maxRowValue = findMaxRowValue(horizontalSums);
+
+        //transition is added when there is change in pixel values between two rows and the latter turns fully white
+        for (int y = 1; y < endY; y++) {
+            if ((Math.abs(horizontalSums[y-1] - horizontalSums[y]) > 0) && (horizontalSums[y] == maxRowValue)) {
+                transitions.add(y);
+            }
+        }
+
+        System.out.println("Transition: " + transitions);
+
+        for (int t = 0; t < transitions.size()-1; t++) {
+            int[] segmentCoordinates = new int[] {startX, transitions.get(t), endX, transitions.get(t+1)};
+            //saves the x,y,width,height values
+            wordCoordinates.add(new int[] {startX, transitions.get(t), endX, transitions.get(t+1)});
+            crop(img, segmentCoordinates);
+        }
+        transitions.clear();
+    }
+    return wordCoordinates;
+}
+
+//find the sum of pixel values in rows
+public static int[] findRowSum (BufferedImage img, int x, int y, int x2, int y2) {
+    int[] rowSum = new int[y2];
+
+    for (int h = y; h < y2; h++) {
+        for (int w = x; w < x2; w++) {
+            int pixel = img.getRGB(w, h) & 0xff;
+            //finds row sum for each row
+            rowSum[h] += pixel;
+        }
+    }
+    return rowSum;
+}
+
+//find the maximum row
+public static int findMaxRowValue (int[] rowSums) {
+    int maxRowSum = 0;
+
+    for (int i = 1; i < rowSums.length; i++) {
+        if (rowSums[i] > maxRowSum) {
+            maxRowSum = rowSums[i];
+        }
+    }
+
+    return maxRowSum;
 }
  **/
