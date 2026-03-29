@@ -28,7 +28,7 @@ public class Segmentation {
             display(img);
         }
 
-        //method to segment the word letter by letter
+        //method to find the bounding box of the text in the image
         int[] edgesCoordinates = detectWordSpace(img);
 
         //crops the image to the detected word space if coordinates for pixels are detected
@@ -41,20 +41,18 @@ public class Segmentation {
         }
 
         //finds the coordinates of each column of words in the image
-        ArrayList <int[]> columnCoordinates = segmentColumns(wordOnlyImage);
-        //remove empty columns
-        removeEmptyColumns(wordOnlyImage, columnCoordinates);
-
+        BufferedImage binarizedImage = binarize(wordOnlyImage);
+        ArrayList <int[]> columnCoordinates = segmentColumns(binarizedImage);
         int columnCount = columnCoordinates.size();
-        int[] spineColumn = new int[columnCount];
+        int[] connectionLineIndex = new int[columnCount];
         System.out.println("Column count is: " + columnCount);
         //finds the overarching line the words are written for each column
         for (int c = 0; c < columnCount; c++) {
             System.out.println(Arrays.toString(columnCoordinates.get(c)));
-            spineColumn[c] = findSpine(wordOnlyImage, columnCoordinates.get(c));
+            connectionLineIndex[c] = findConnectionLine(wordOnlyImage, columnCoordinates.get(c));
         }
-
-        for  (int s : spineColumn) {
+        /**
+        for  (int s : connectionLineIndex) {
             System.out.println("Min Column");
             System.out.println(s);
         }
@@ -69,20 +67,21 @@ public class Segmentation {
         for (int w = 0; w < everyWordCoordinates.size(); w++) {
             int[] eachWordCoordinates = everyWordCoordinates.get(w);
             //if the spine column is within the coordinates range for width of the word , the method is called
-            if (everyWordCoordinates.get(w)[0] < spineColumn[i] && spineColumn[i] < everyWordCoordinates.get(w)[2]) {
-               letterCoordinates.addAll(segmentLetters(wordOnlyImage, eachWordCoordinates, spineColumn[i]));
+            if (everyWordCoordinates.get(w)[0] < connectionLineIndex[i] && connectionLineIndex[i] < everyWordCoordinates.get(w)[2]) {
+               letterCoordinates.addAll(segmentLetters(wordOnlyImage, eachWordCoordinates, connectionLineIndex[i]));
             }
             //or else, the next spine column is used to call the method for segmenting the words until it reaches its maximum
-            else if (everyWordCoordinates.get(w)[0] > spineColumn[i]) {
+            else if (everyWordCoordinates.get(w)[0] > connectionLineIndex[i]) {
                 i++;
-                if(i < spineColumn.length) {
-                   letterCoordinates.addAll(segmentLetters(wordOnlyImage, eachWordCoordinates, spineColumn[i]));
+                if(i < connectionLineIndex.length) {
+                   letterCoordinates.addAll(segmentLetters(wordOnlyImage, eachWordCoordinates, connectionLineIndex[i]));
                 }
             }
 
         }
         //resize every letters and save images to prepare to feed it for the MLP
         //resizeLetters(wordOnlyImage, letterCoordinates, inputFileName);
+         **/
     }
 
     // display an image in a JPanel popup
@@ -98,15 +97,17 @@ public class Segmentation {
         frame.setVisible(true);
     }
 
-    //method to detect where the words are within the given image
+    //method to detect where the words are within the given image; finding the bounding box
     public static int[] detectWordSpace(BufferedImage img){
         //Variable Declarations
         int width = img.getWidth(); // number of columns
         int height = img.getHeight();  // number of rows
-        ArrayList<Point> letterPixels = new ArrayList<>();
-        int threshold = 10; // threshold to identify the darker pixel for the words
-        int leftestWidth = img.getWidth(), lowestHeight = img.getHeight();
-        int rightestWidth=0, highestHeight=0;
+        int threshold = 50; // threshold to identify the darker pixel for the words
+        int leftestWidth = width;
+        int highestHeight = 0;
+        int rightestWidth = 0;
+        int lowestHeight = height;
+        boolean found = false;
 
         //detecting letters in pure black and white environment
         //black strokes should be less than or equal to 10; Value of 0 is ideal
@@ -114,35 +115,58 @@ public class Segmentation {
             for (int y = 0; y < height; y++) {
                 int pixel = img.getRGB(x, y) & 0xff;
                 if (pixel <= threshold) {
-                    letterPixels.add(new Point(x,y)); // letterPixels will contain all (x, y) coordinates of black pixels
+                    found = true;
+                    //comparing the values to find the bounding box
+                    if (x < leftestWidth) leftestWidth = x;
+                    if (x > rightestWidth) rightestWidth = x;
+                    if (y > highestHeight) highestHeight = y;
+                    if (y < lowestHeight) lowestHeight = y;
                 }
             }
         }
 
-        if (!letterPixels.isEmpty()) {
-            //saving the leftest width (lowest)
-            leftestWidth = letterPixels.getFirst().x;
-
-            for (int i= 0; i < letterPixels.size(); i++) {
-                //getting the highest height
-                if (highestHeight < letterPixels.get(i).y) {
-                    highestHeight = letterPixels.get(i).y;
-                }
-                //getting the rightest width
-                if (rightestWidth < letterPixels.get(i).x) {
-                    rightestWidth = letterPixels.get(i).x;
-                }
-                //getting the lowest height
-                if (lowestHeight > letterPixels.get(i).y) {
-                    lowestHeight = letterPixels.get(i).y;
-                }
-            }
-            return new int[] {leftestWidth, lowestHeight, rightestWidth, highestHeight};
-        }
         //return empty array if there was no black pixel detected, assuming there isn't any word in the photo
-        else {
+        if (!found) {
             return new int[0];
         }
+        return new int[] {leftestWidth, lowestHeight, rightestWidth, highestHeight};
+    }
+
+    //binarizing an image to only black and white
+    public static BufferedImage binarize(BufferedImage img) {
+        System.out.println("Binarizing Image");
+        //create new BufferedImage called binarizedImage
+        //TYPE_BYTE_GRAY: each pixel is stored as one byte (8 bits) and they represent intensity/brightness
+        BufferedImage binarizedImage = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_BYTE_GRAY);
+        int threshold = 120; //threshold to either make the pixel black or white
+        int rgb = 0, r = 0, g = 0, b = 0; //variable declarations for rgb value
+
+        for (int y = 0; y < img.getHeight(); y++) {
+            for (int x = 0; x < img.getWidth(); x++) {
+                rgb = (int) (img.getRGB(x, y)); //get the rgb value of each pixels
+                //seperate red, green, and blue through shift operation
+                //bit manipulation to extract RGB components from a single integer pixel value in Java
+                r = ((rgb >> 16) & 0xFF);
+                g = ((rgb >> 8) & 0xFF);
+                b = (rgb & 0xFF);
+                //luminance grayscale conversion formula; weighted luminance
+                rgb = (int) (0.299 * r + 0.587 * g + 0.114 * b);
+
+                //choosing to make the pixel either black or white by comparing it to the threshold
+                int value;
+                if (rgb > threshold) {
+                    value = 255; //pure white pixel value
+                } else {
+                    value = 0; //pure black pixel value
+                }
+                int newRGB;
+                //overriding the rgb value with shifted value
+                rgb = (255 << 24) | (value << 16) | (value << 8) | value;
+                //setting the rgb value to the new value
+                binarizedImage.setRGB(x, y, rgb);
+            }
+        }
+        return binarizedImage;
     }
 
     //Method to cut the white space before the start of each words
@@ -185,7 +209,7 @@ public class Segmentation {
 
     //finds the main body line from the letters by calculating the column
     //that has the lowest value; how will i use this?
-    public static int findSpine(BufferedImage img, int[] columnCoordinate) {
+    public static int findConnectionLine(BufferedImage img, int[] columnCoordinate) {
         // Variable Declarations
         int startX = columnCoordinate[0];
         int startY = columnCoordinate[1];
@@ -218,108 +242,70 @@ public class Segmentation {
         return minColumnIndex;
     }
 
-    //method to find the coordinates for each column in the input image
-    //should I use sobel algorithm? or implement 2d matrices for complexity?
+    //method to find the coordinates for each column in the input image using vertical projection profile
     public static ArrayList<int[]> segmentColumns(BufferedImage img) {
-        //variable to keep the transitions
-        ArrayList<Integer> transitions = new ArrayList<>();
-        transitions.add(0); //picture starts with the column 0
+        ArrayList<Integer> transitions = new ArrayList<>();  //variable to keep the transitions
         ArrayList<int[]> columnCoordinates = new ArrayList<>(); //variable to keep track of the column coordinates
         int width = img.getWidth();
         int height = img.getHeight();
         int[] vertSums = new int[width];
         int maxColumn = vertSums[0];
-        int columnThreshold = 10; //make the threshold dynamic!
 
         //find sum of the columns
         for (int x = 0; x < width; x++) {
+            int sum = 0;
             for (int y = 0; y < height; y++) {
                 int pixel = img.getRGB(x, y) & 0xff;
-
+                //add 1 if the pixel is black, add 0 if the pixel is otherwise
+                sum = (pixel < 50) ? 1 : 0;
                 //finds column sum for each column
-                vertSums[x] += pixel;
+                vertSums[x] += sum;
             }
         }
 
-        //finding the column with the maximum sum
-        for (int i = 1; i < vertSums.length; i++) {
-            if (vertSums[i] > maxColumn) {
-                maxColumn = vertSums[i];
-            }
-        }
+        boolean textExist = false;
+        int startColumn = 0;
 
-        //finds the transition zone by checking if the column sum changes into fully white while it was less than the maximum column sum
-        //and also when the fully white column turns into lesser values
-        for (int x = 1; x < width - 1; x++) {
-            if (((Math.abs(vertSums[x-1] - vertSums[x]) > 0) && (vertSums[x] == maxColumn)) || (vertSums[x] == maxColumn) && Math.abs(vertSums[x+1] - vertSums[x]) > 0) {
-                transitions.add(x);
-                //transition has to be at least 10 pixel long to be considered a transition
-                //if the transition length is lower than the threshold, it is not considered as a transition
-                int length = transitions.size();
-                System.out.println(length);
-                if (transitions.get(length-1) - transitions.get(length-2) < columnThreshold) {
-                    transitions.remove(length-1);
+        for (int x = 0; x < width; x++) {
+            if (!textExist && vertSums[x] > 0) {
+                //column starts when the sum of the column is greater than 0
+                textExist = true;
+                startColumn = x;
+            } else if (textExist && vertSums[x] == 0) {
+                //column ends when the sum of the column reaches 0
+                textExist = false;
+                int endColumn = x - 1;
+                //the start and end of the columns are added as transitions only when their length is greater or equal to 1
+                if (endColumn - startColumn >= 1) {
+                    transitions.add(startColumn);
+                    transitions.add(endColumn);
                 }
             }
         }
 
-        //if the last transition is not until the last width of the image, include it; including the last column
-        if (transitions.getLast() != width) {
-            transitions.add(width);
+        //if there is still text in the last column of the image, add the width to the transition zone
+        if (textExist) {
+            transitions.add(startColumn);
+            transitions.add(width - 1);
         }
-
         System.out.println(transitions);
 
         //if no transition was added it will return the image
-        if (transitions.size() == 1) {
-            columnCoordinates.add(new int[] { 0, 0, width, height});
-        }
+        if (transitions.size() == 0) columnCoordinates.add(new int[]{0, 0, width, height});
         else {
             //displays the cropped columns and saves the coordinates to an int[] arraylist
-            for (int i = 0; i < transitions.size() - 1; i ++) {
-                //display purposes
-                int[] segmentCoordinates = new int[]{transitions.get(i), 0, transitions.get(i + 1), height - 1};
+            for (int i = 0; i < transitions.size(); i +=2 ) {
+                int startX = transitions.get(i);
+                int endX = transitions.get(i + 1);
+                int[] segmentCoordinates = new int[]{startX, 0, endX, height - 1};
                 //saves the x,y,width,height values
-                columnCoordinates.add(new int[]{transitions.get(i), 0, transitions.get(i + 1), height - 1});
+                columnCoordinates.add(new int[]{startX, 0, endX, height - 1});
                 crop(img, segmentCoordinates);
             }
         }
-        System.out.println(("Finishing column coordinates"));
         return columnCoordinates;
     }
 
-    //removes empty columns by calculating the density and comparing it with the threshold
-    public static void removeEmptyColumns(BufferedImage img, ArrayList<int[]> columnCoordinates) {
-        double threshold = 0.005; //amount of density the columns should at least have
-        Iterator<int[]> iterator = columnCoordinates.iterator();
-        int height = img.getHeight();
-
-        while (iterator.hasNext()) {
-            int[] column = iterator.next();
-            int startX = column[0];
-            int endX = column[2];
-            int blackPixelCount = 0;
-            int width = endX - startX;
-
-            for (int x = startX; x < endX; x++) {
-                for (int y = 0; y < height; y++) {
-                    int rgb = img.getRGB(x, y) & 0xFF;
-
-                    if (rgb < 10) { //detect black pixel
-                        blackPixelCount++;
-                    }
-                }
-            }
-
-            double density = blackPixelCount / (double)(width * height);
-            System.out.println("Column density: " + density);
-            //remove column if density is lower than the threshold
-            if (density < threshold) {
-                iterator.remove();
-            }
-
-        }
-    }
     //method to find the word coordinates by using the row sum
     public static ArrayList<int[]> segmentWordsPerColumn(BufferedImage img, ArrayList <int[]> columnCoordinates) {
         //variable to keep track of the transitions
@@ -530,4 +516,36 @@ public class Segmentation {
     }
 
 }
+/**
+//removes empty columns by calculating the density and comparing it with the threshold
+public static void removeEmptyColumns(BufferedImage img, ArrayList<int[]> columnCoordinates) {
+    double threshold = 0.005; //amount of density the columns should at least have
+    Iterator<int[]> iterator = columnCoordinates.iterator();
+    int height = img.getHeight();
 
+    while (iterator.hasNext()) {
+        int[] column = iterator.next();
+        int startX = column[0];
+        int endX = column[2];
+        int blackPixelCount = 0;
+        int width = endX - startX;
+
+        for (int x = startX; x < endX; x++) {
+            for (int y = 0; y < height; y++) {
+                int rgb = img.getRGB(x, y) & 0xFF;
+
+                if (rgb < 10) { //detect black pixel
+                    blackPixelCount++;
+                }
+            }
+        }
+
+        double density = blackPixelCount / (double)(width * height);
+        System.out.println("Column density: " + density);
+        //remove column if density is lower than the threshold
+        if (density < threshold) {
+            iterator.remove();
+        }
+    }
+}
+ **/
