@@ -68,7 +68,50 @@ public class Main {
          }
 
          //loads the image that needs training
-         double[] sampleInput = preprocessImage(new File("test4.png"));
+         String inputFileName = "dataset7.png";
+         File file = new File(inputFileName);
+         BufferedImage img = null;
+         BufferedImage wordOnlyImage = null;
+
+         //check if the image exists
+         try {
+              img = ImageIO.read(file);
+         } catch (IOException e) {
+              e.printStackTrace();
+              System.exit(1);
+         }
+
+         if (img != null) {
+              Segmentation.display(img);
+         }
+
+         //finds the bounding box of the text in the image
+         int[] edgesCoordinates = Segmentation.detectWordSpace(img);
+
+         //crops the image to the detected word space if coordinates for pixels are detected
+         if (edgesCoordinates[0] == 0) {
+              System.out.println("There was no word detected in the image.");
+              System.exit(0); //The program is terminated if there is no black pixel detected
+         } else {
+              wordOnlyImage = Segmentation.crop(img, edgesCoordinates);
+         }
+
+         //binarizing the cropped image
+         BufferedImage binarizedImage = Segmentation.binarize(wordOnlyImage);
+         //segments the columns in the binarized image
+         ArrayList<int[]> columnCoordinates = Segmentation.segmentColumns(binarizedImage);
+         //finds the coordinates for every word in every column
+         ArrayList<int[]> everyWordCoordinates = Segmentation.segmentWordsPerColumn(binarizedImage, columnCoordinates);
+         ArrayList<double[]> allVectors = new ArrayList<>(); //save all the vectors that is being returned
+         //calls the method to segment letters for each word and then resize it
+         for (int w = 0; w < everyWordCoordinates.size(); w++) {
+              int[] eachWordCoordinates = everyWordCoordinates.get(w);
+              double[] vectorLetter = Segmentation.segmentLetters(binarizedImage, eachWordCoordinates, 40, inputFileName, w);
+              allVectors.add(vectorLetter);
+         }
+
+          /**
+         double[] sampleInput = vectorLetter;
          double[] output = mlp.forward(sampleInput);
          double[] prediction = MLP.softmax(output); //softmax probability
          int predictedIndex = 0;
@@ -86,24 +129,9 @@ public class Main {
          System.out.println("Predicted letter: " + predictedLetter);
          double maxPercentage = Math.min(maxProb * 100, 99.99); //turning the probability to percentage
          System.out.printf("Probability: %.2f%%%n", maxPercentage);
+           **/
+
     }
-
-     //method to read the image that needs predicting
-     public static double[] preprocessImage(File imgFile) throws IOException {
-          BufferedImage img = ImageIO.read(imgFile);
-          int width = img.getWidth();
-          int height = img.getHeight();
-          double[] input = new double[width * height];
-
-          //flattens the image and returns it
-          for (int y = 0; y < height; y++) {
-               for (int x = 0; x < width; x++) {
-                    int pixel = img.getRGB(x, y) & 0xff; //assuming grayscale images
-                    input[y * width + x] = pixel / 255.0;
-               }
-          }
-          return input;
-     }
 
 }
 
