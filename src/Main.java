@@ -22,7 +22,7 @@ public class Main {
 
          //variable declarations for mlp
          int inputSize = inputs[0].length;
-         int[] hiddenLayers = {120};
+         int[] hiddenLayers = {180};
          int outputNeurons = dataset.targets[0].length;
          double learningRate = 0.05;
          int epochs = 1000;
@@ -68,7 +68,7 @@ public class Main {
          }
 
          //loads the image that needs training
-         String inputFileName = "dataset7.png";
+         String inputFileName = "segMLPtest.png";
          File file = new File(inputFileName);
          BufferedImage img = null;
          BufferedImage wordOnlyImage = null;
@@ -102,38 +102,57 @@ public class Main {
          ArrayList<int[]> columnCoordinates = Segmentation.segmentColumns(binarizedImage);
          //finds the coordinates for every word in every column
          ArrayList<int[]> everyWordCoordinates = Segmentation.segmentWordsPerColumn(binarizedImage, columnCoordinates);
-         ArrayList<double[]> allVectors = new ArrayList<>(); //save all the vectors that is being returned
-         //calls the method to segment letters for each word and then resize it
+         ArrayList<BufferedImage> letters = new ArrayList<>(); //variable to save the resized letter images
+
          for (int w = 0; w < everyWordCoordinates.size(); w++) {
               int[] eachWordCoordinates = everyWordCoordinates.get(w);
-              double[] vectorLetter = Segmentation.segmentLetters(binarizedImage, eachWordCoordinates, 40, inputFileName, w);
-              allVectors.add(vectorLetter);
-         }
+              //calls the method to segment letters for each word and then resize it
+              letters = Segmentation.segmentLetters(binarizedImage, eachWordCoordinates, inputFileName, w);
 
-          /**
-         double[] sampleInput = vectorLetter;
-         double[] output = mlp.forward(sampleInput);
-         double[] prediction = MLP.softmax(output); //softmax probability
-         int predictedIndex = 0;
-         double maxProb = prediction[0];
+              for (BufferedImage letter : letters) {
+                   //the letter image is flattened and then fed to the MLP
+                   double[] inputVector = Segmentation.preprocessImage(letter);
+                   double[] output = mlp.forward(inputVector);
+                   double[] prediction = MLP.softmax(output); //softmax probability
+                   int predictedIndex = 0;
+                   double maxProb = prediction[0];
 
-         for (int i = 1; i < prediction.length; i++) {
-              if (prediction[i] > maxProb) {
-                   maxProb = prediction[i];
-                   predictedIndex = i;
+                   for (int i = 1; i < prediction.length; i++) {
+                        if (prediction[i] > maxProb) {
+                             maxProb = prediction[i];
+                             predictedIndex = i;
+                        }
+                   }
+                   //map index back to letter
+                   String predictedLetter = lettersList.get(predictedIndex); // lettersList from DatasetProcessor
+                   System.out.println("Predicted letter: " + predictedLetter);
+                   double maxPercentage = Math.min(maxProb * 100, 99.99); //turning the probability to percentage
+                   System.out.printf("Probability: %.2f%%%n", maxPercentage);
               }
          }
-
-         //map index back to letter
-         String predictedLetter = lettersList.get(predictedIndex); // lettersList from DatasetProcessor
-         System.out.println("Predicted letter: " + predictedLetter);
-         double maxPercentage = Math.min(maxProb * 100, 99.99); //turning the probability to percentage
-         System.out.printf("Probability: %.2f%%%n", maxPercentage);
-           **/
-
     }
 
 }
 
+/**
+ double[] sampleInput = vectorLetter;
+ double[] output = mlp.forward(sampleInput);
+ double[] prediction = MLP.softmax(output); //softmax probability
+ int predictedIndex = 0;
+ double maxProb = prediction[0];
+
+ for (int i = 1; i < prediction.length; i++) {
+ if (prediction[i] > maxProb) {
+ maxProb = prediction[i];
+ predictedIndex = i;
+ }
+ }
+
+ //map index back to letter
+ String predictedLetter = lettersList.get(predictedIndex); // lettersList from DatasetProcessor
+ System.out.println("Predicted letter: " + predictedLetter);
+ double maxPercentage = Math.min(maxProb * 100, 99.99); //turning the probability to percentage
+ System.out.printf("Probability: %.2f%%%n", maxPercentage);
+ **/
 
 

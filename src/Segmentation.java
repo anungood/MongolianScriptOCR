@@ -4,17 +4,20 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Array;
 import java.util.ArrayList;
+import java.util.Arrays;
 
 public class Segmentation {
     public static void main(String[] args) {
         //load image file
-        String inputFileName = "dataset7.1.png";
+        String inputFileName = "segMLPtest.png";
         File file = new File(inputFileName);
         ArrayList <int[]> letterCoordinates = new ArrayList<>();
         //Buffered Image object
         BufferedImage img = null;
         BufferedImage wordOnlyImage = null;
+
         //Error Handling try-catch block to see if the file exists
         try {
             img = ImageIO.read(file);
@@ -42,12 +45,17 @@ public class Segmentation {
         ArrayList <int[]> columnCoordinates = segmentColumns(binarizedImage);
         //finds the coordinates for every word in every column
         ArrayList<int[]> everyWordCoordinates = segmentWordsPerColumn(binarizedImage, columnCoordinates);
+        ArrayList<BufferedImage> letters = new ArrayList<>(); //variable to save the resized image of the letters
 
-        double[] vectorLetter; //variable to save the flattened vector for each resized letter image
         //calls the method to segment letters for each word and then resize it
         for (int w = 0; w < everyWordCoordinates.size(); w++) {
             int[] eachWordCoordinates = everyWordCoordinates.get(w);
-            vectorLetter = segmentLetters(binarizedImage, eachWordCoordinates, 40, inputFileName, w);
+            letters = segmentLetters(binarizedImage, eachWordCoordinates, inputFileName, w);
+            for (BufferedImage letter : letters) {
+                double[] inputVector = Segmentation.preprocessImage(letter);
+                System.out.println(Arrays.toString(inputVector));
+            }
+
         }
     }
 
@@ -105,7 +113,7 @@ public class Segmentation {
         //create new BufferedImage called binarizedImage
         //TYPE_BYTE_GRAY: each pixel is stored as one byte (8 bits) and they represent intensity/brightness
         BufferedImage binarizedImage = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_BYTE_GRAY);
-        int threshold = 120; //threshold to either make the pixel black or white
+        int threshold = 150; //threshold to either make the pixel black or white
         int rgb = 0, r = 0, g = 0, b = 0; //variable declarations for rgb value
 
         for (int y = 0; y < img.getHeight(); y++) {
@@ -284,8 +292,9 @@ public class Segmentation {
     }
 
     //segments every letter by creating artificial whitespace through cutting the word text image from the left
-    public static double[] segmentLetters(BufferedImage img, int[] eachWordCoordinates, int targetWidth, String inputFileName, int wordCount) {
+    public static ArrayList<BufferedImage> segmentLetters(BufferedImage img, int[] eachWordCoordinates, String inputFileName, int wordCount) {
         //Variable Declarations
+        ArrayList<BufferedImage> letters = new ArrayList<>();
         int startX = eachWordCoordinates[0];
         int startY = eachWordCoordinates[1];
         int endX = eachWordCoordinates[2];
@@ -295,11 +304,27 @@ public class Segmentation {
         //original word img
         int wordWidth = endX - startX;
         int wordHeight = endY - startY;
+        double cutValue;
+        int targetWidth = 0;
+        int minHeight = 0;
         BufferedImage wordImg = img.getSubimage(startX, startY, wordWidth, wordHeight);
 
-        //resize the original image into a fix width and scale the height
+
+        double ratio = (double)wordWidth/(double)wordHeight;
+        //depending on the ratio between the width and the height, the targetwidth, cutvalue, and minheight are set
+        if (ratio > 0.65) {
+            targetWidth = 30;
+            cutValue = 0.28;
+            minHeight = 3;
+        }
+        else {
+            targetWidth = 40;
+            cutValue = 0.38;
+            minHeight = 5;
+        }
         double scale = (double) targetWidth / wordWidth;
         int resizedHeight = (int) (wordHeight * scale);
+        //resize the original image into a fix width and scale the height
         BufferedImage resizedWord = resizeImage(wordImg, targetWidth, resizedHeight);
 
         //reassigning the new values for the image coordinates
@@ -310,7 +335,8 @@ public class Segmentation {
 
         //creates a left zone of the image by cutting before the connection line to create artificial whitespace
         //maybe check the connection line-> whether the cut amount is greater or lesser than it
-        int leftZoneEnd = (int) (resizedWord.getWidth() * 0.38);
+        int leftZoneEnd = (int) (resizedWord.getWidth() * cutValue);
+        //display(resizedWord);
         //find horizontal projection line within the left zone of the word
         int[] hppSum = findHPP(resizedWord, startX, startY, leftZoneEnd, endY);
 
@@ -327,14 +353,15 @@ public class Segmentation {
             }
         }
 
-        int minHeight = 5; //threshold for whether or not to include the transition or not with it length
+        //threshold for whether or not to include the transition by comparing to the minimum height
         int lastStart = transitions.getLast();
-        if (resizedWord.getHeight() - lastStart < minHeight && transitions.size() > 1) {
+        if (resizedWord.getHeight() - lastStart < minHeight && !transitions.isEmpty()) {
             //merge with previous transition if the transition length is too short
             transitions.set(transitions.size() - 1, endY);
         } else if (lastStart < endY) {
-            //add the last height coordinate if the previous transition wasn't long enough
-            transitions.add(endY);
+            if (transitions.isEmpty() || transitions.get(transitions.size() - 1) != endY) {
+                transitions.add(endY); //add the last height coordinate if the previous transition wasn't long enough
+            }
         }
 
         //makes letter coordinates with the transitions; the end of the letter becomes the start of the next letter
@@ -342,17 +369,32 @@ public class Segmentation {
             int start = transitions.get(i);
             int end = transitions.get(i + 1);
 
-            if (end - start >= minHeight) { //transitions must be longer than the minimum height to avoid having small segments
+            //skips duplicate or invalid transitions
+            if (end <= start) {
+                continue;
+            }
+
+            //merges small segments that is less than the minHeight  with the next one
+            if (end - start < minHeight) {
+                if (i + 2 < transitions.size()) {
+                    //merges the next transition
+                    end = transitions.get(i + 2);
+                    i++; //skips to the next transition
+                } else {
+                    continue;
+                }
+            }
+
+            if (end - start >= minHeight) { //enforcing that the transitions must be longer than the minimum height to avoid having small segments
                 int[] segmentCoordinates = new int[] { startX, start, endX, end };
                 letterCoordinates.add(segmentCoordinates);
                 crop(resizedWord, segmentCoordinates);
             }
         }
         //calls the resize letter method to scale the letter to 30*20 pixels, in order to feed it for the mlp
-        resizeLetters(resizedWord, letterCoordinates, inputFileName, wordCount);
-        //double[] letterVector = preprocessImage(resizedWord);
-        double[] letterVector = null;
-        return letterVector;
+        BufferedImage letter = resizeLetters(resizedWord, letterCoordinates, inputFileName, wordCount);
+        letters.add(letter);
+        return letters;
     }
 
     public static BufferedImage resizeImage(BufferedImage originalImage, int targetWidth, int targetHeight) {
@@ -366,11 +408,13 @@ public class Segmentation {
         return resizedImage;
     }
 
-    public static void resizeLetters (BufferedImage croppedImage, ArrayList<int[]> letterCoordinates, String inputFileName, int wordCount) {
+    public static BufferedImage resizeLetters (BufferedImage croppedImage, ArrayList<int[]> letterCoordinates, String inputFileName, int wordCount) {
         int targetWidth = 30;
         int targetHeight = 20;
+        BufferedImage resizedLetter = null;
         String extractedInputName = inputFileName;
         String outputFolder = "output";
+        double[] flattenedLetter = new double[targetHeight*targetWidth];
 
         //gets the index of where the dot is placed inside the input file name to cut the word
         int cutIndex = inputFileName.lastIndexOf('.');
@@ -392,14 +436,10 @@ public class Segmentation {
             int height = letterCoordinates.get(i)[3] - letterCoordinates.get(i)[1];
 
             //displaying segmented letters
-            BufferedImage letter = croppedImage.getSubimage(letterCoordinates.get(i)[0], letterCoordinates.get(i)[1],
-                    width, height);
+            BufferedImage letter = croppedImage.getSubimage(letterCoordinates.get(i)[0], letterCoordinates.get(i)[1], width, height);
             //display(letter);
-
             //calculating scaling value
-            double scale = Math.min((double) targetWidth / width,
-                    (double) targetHeight / height
-            );
+            double scale = Math.min((double) targetWidth / width, (double) targetHeight / height);
 
             //calculating updated width and height to resize
             int scaledWidth = (int) Math.round(width * scale);
@@ -419,7 +459,7 @@ public class Segmentation {
             gScaled.dispose();
 
             //new image with the desired width and height
-            BufferedImage resizedLetter = new BufferedImage( targetWidth, targetHeight, BufferedImage.TYPE_BYTE_GRAY);
+            resizedLetter = new BufferedImage( targetWidth, targetHeight, BufferedImage.TYPE_BYTE_GRAY);
             Graphics2D gOut = resizedLetter.createGraphics();
             gOut.setColor(Color.WHITE);
             gOut.fillRect(0, 0, targetWidth, targetHeight); //makes the whole image background to white
@@ -428,6 +468,12 @@ public class Segmentation {
             //padding to center the resized letter image
             gOut.drawImage(scaledImage, xSpace, ySpace, null);
             gOut.dispose();
+
+            /**
+            flattenedLetter = preprocessImage(resizedLetter);
+            allFlattenedLetters.add(flattenedLetter);
+            System.out.println("flattened letter is " + Arrays.toString(flattenedLetter));
+             **/
 
             /**
             //saves the resized image into a folder -> used for making letter training dataset
@@ -440,6 +486,7 @@ public class Segmentation {
             }
              **/
         }
+        return resizedLetter;
     }
 
     //method to read the image that needs predicting -> creates 1 dimensional vector
