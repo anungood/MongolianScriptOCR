@@ -25,7 +25,7 @@ public class Main {
          int[] hiddenLayers = {180};
          int outputNeurons = dataset.targets[0].length;
          double learningRate = 0.05;
-         int epochs = 1000;
+         int epochs = 400;
 
          //initializing MLP
          MLP mlp = new MLP(inputSize, hiddenLayers, outputNeurons);
@@ -103,11 +103,13 @@ public class Main {
          //finds the coordinates for every word in every column
          ArrayList<int[]> everyWordCoordinates = Segmentation.segmentWordsPerColumn(binarizedImage, columnCoordinates);
          ArrayList<BufferedImage> letters = new ArrayList<>(); //variable to save the resized letter images
+         StringBuilder predictedSentence = new StringBuilder(); //variable to keep the predicted words in the image
 
          for (int w = 0; w < everyWordCoordinates.size(); w++) {
+              StringBuilder predictedWord = new StringBuilder(); //variable to keep the word from the predicted letter
               int[] eachWordCoordinates = everyWordCoordinates.get(w);
               //calls the method to segment letters for each word and then resize it
-              letters = Segmentation.segmentLetters(binarizedImage, eachWordCoordinates, inputFileName, w);
+              letters = Segmentation.segmentLettersAndResize(binarizedImage, eachWordCoordinates, inputFileName, w);
 
               for (BufferedImage letter : letters) {
                    //the letter image is flattened and then fed to the MLP
@@ -123,15 +125,23 @@ public class Main {
                              predictedIndex = i;
                         }
                    }
+
                    //map index back to letter
-                   String predictedLetter = lettersList.get(predictedIndex); // lettersList from DatasetProcessor
+                   //String predictedLetter = lettersList.get(predictedIndex); // lettersList from DatasetProcessor
+                   //map predicted folder back to letter
+                   String predictedFolder = dataset.classList.get(predictedIndex);
+                   String predictedLetter = dataset.variantToLetter.get(predictedFolder);
                    System.out.println("Predicted letter: " + predictedLetter);
                    double maxPercentage = Math.min(maxProb * 100, 99.99); //turning the probability to percentage
                    System.out.printf("Probability: %.2f%%%n", maxPercentage);
+                   predictedWord.append(predictedLetter); //add the predicted letter to word
               }
+              System.out.println("Predicted word: " + predictedWord.toString());
+              predictedSentence.append(predictedWord.toString()); //adds the word to the predicted sentence
+              predictedSentence.append(" "); //adds space between words
          }
+         System.out.println("Predicted sentence: " + predictedSentence.toString().trim());
     }
-
 }
 
 /**

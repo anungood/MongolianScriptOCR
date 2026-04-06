@@ -4,7 +4,6 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
-import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Arrays;
 
@@ -50,12 +49,11 @@ public class Segmentation {
         //calls the method to segment letters for each word and then resize it
         for (int w = 0; w < everyWordCoordinates.size(); w++) {
             int[] eachWordCoordinates = everyWordCoordinates.get(w);
-            letters = segmentLetters(binarizedImage, eachWordCoordinates, inputFileName, w);
+            letters = segmentLettersAndResize(binarizedImage, eachWordCoordinates, inputFileName, w);
             for (BufferedImage letter : letters) {
                 double[] inputVector = Segmentation.preprocessImage(letter);
                 System.out.println(Arrays.toString(inputVector));
             }
-
         }
     }
 
@@ -292,7 +290,7 @@ public class Segmentation {
     }
 
     //segments every letter by creating artificial whitespace through cutting the word text image from the left
-    public static ArrayList<BufferedImage> segmentLetters(BufferedImage img, int[] eachWordCoordinates, String inputFileName, int wordCount) {
+    public static ArrayList<BufferedImage> segmentLettersAndResize(BufferedImage img, int[] eachWordCoordinates, String inputFileName, int wordCount) {
         //Variable Declarations
         ArrayList<BufferedImage> letters = new ArrayList<>();
         int startX = eachWordCoordinates[0];
@@ -389,11 +387,12 @@ public class Segmentation {
                 int[] segmentCoordinates = new int[] { startX, start, endX, end };
                 letterCoordinates.add(segmentCoordinates);
                 crop(resizedWord, segmentCoordinates);
+                //calls the resize letter method to scale the letter to 30*20 pixels, in order to feed it for the mlp
+                BufferedImage letter = resizeLetters(resizedWord, letterCoordinates, inputFileName, wordCount);
+                letters.add(letter);
             }
         }
-        //calls the resize letter method to scale the letter to 30*20 pixels, in order to feed it for the mlp
-        BufferedImage letter = resizeLetters(resizedWord, letterCoordinates, inputFileName, wordCount);
-        letters.add(letter);
+
         return letters;
     }
 
@@ -469,13 +468,6 @@ public class Segmentation {
             gOut.drawImage(scaledImage, xSpace, ySpace, null);
             gOut.dispose();
 
-            /**
-            flattenedLetter = preprocessImage(resizedLetter);
-            allFlattenedLetters.add(flattenedLetter);
-            System.out.println("flattened letter is " + Arrays.toString(flattenedLetter));
-             **/
-
-            /**
             //saves the resized image into a folder -> used for making letter training dataset
             File outputFile = new File(folder, "word_" + wordCount + "_letter_" + i + ".png");
 
@@ -484,7 +476,7 @@ public class Segmentation {
             } catch (IOException e) {
                 e.printStackTrace();
             }
-             **/
+
         }
         return resizedLetter;
     }

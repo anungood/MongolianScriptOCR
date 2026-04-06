@@ -12,7 +12,9 @@ public class DatasetProcessor {
     public static class Dataset {
         public double[][] inputs;
         public double[][] targets;
-        public ArrayList<String> lettersList;
+        public ArrayList<String> lettersList;// unique letters, used for mapping later
+        public ArrayList<String> classList;   // each variant = class for training
+        public HashMap<String, String> variantToLetter; // map variant -> letter
     }
 
     //method to load images from folders and apply one-hot encoding
@@ -29,27 +31,35 @@ public class DatasetProcessor {
         }
 
         //saving unique letters from the training set by cutting before the underscore in each folder name
+        //HashSet<String> lettersSet = new HashSet<>();
+        ArrayList<String> classList = new ArrayList<>(); //saves all the different variants of the letters from the letters
+        HashMap<String, String> variantToLetter = new HashMap<>(); //maps the variant to each letter
         HashSet<String> lettersSet = new HashSet<>();
         for (File folder : folders) {
-            String uniqueLetter = folder.getName().split("_")[0];
-            lettersSet.add(uniqueLetter);
+            //String uniqueLetter = folder.getName().split("_")[0];
+            //lettersSet.add(uniqueLetter);
+            String variantName = folder.getName(); //gets the folder name
+            String letter = variantName.split("_")[0]; //saves the letter from the letter name to map back
+            classList.add(variantName);
+            variantToLetter.put(variantName, letter); //maps the variant name and the letter
+            lettersSet.add(letter);
         }
         //creating an arraylist with the unique letters
         ArrayList<String> lettersList = new ArrayList<>(lettersSet);
-        //Collections.sort(lettersList);
 
-        //mapping letters to numerical indexes
+        //mapping variants to numerical indexes
         HashMap<String, Integer> letterToIndex = new HashMap<>();
-        for (int i = 0; i < lettersList.size(); i++) {
-            letterToIndex.put(lettersList.get(i), i);
+        for (int i = 0; i < classList.size(); i++) {
+            letterToIndex.put(classList.get(i), i);
         }
         //System.out.println("Detected classes: " + letterToIndex);
 
-        //loop over all the folders in the training set and get all the png images in the each folder
+        //loop over all the folders in the training set and get all the png images in each folder
         for (File folder : folders) {
             String folderName = folder.getName();
-            String uniqueLetter = folderName.split("_")[0];
-            int letterIndex = letterToIndex.get(uniqueLetter);
+            //String letter = folderName.split("_")[0];
+            int classIndex = classList.indexOf(folderName); //gets the index of the variant
+            //int letterIndex = letterToIndex.get(uniqueLetter);
             File[] images = folder.listFiles((dir, name) -> name.endsWith(".png"));
             //skip if the folder is empty
             if (images == null) continue;
@@ -72,10 +82,9 @@ public class DatasetProcessor {
                 }
 
                 //target array to save the one-hot encoding
-                double[] target = new double[lettersList.size()];
+                double[] target = new double[classList.size()];
                 Arrays.fill(target, 0.0); //fill the array with 0
-                target[letterIndex] = 1.0; //the index of the letter becomes 1 in the array
-
+                target[classIndex] = 1.0; //the index of the letter becomes 1 in the array
                 inputList.add(input); //vector of the input image
                 targetList.add(target); //array of that has the target letter
                 //System.out.println("Folder: " + folderName + " Letter : " + uniqueLetter + " Index Number: " + letterIndex);
@@ -87,11 +96,13 @@ public class DatasetProcessor {
         double[][] inputs = inputList.toArray(new double[0][]);
         double[][] targets = targetList.toArray(new double[0][]);
 
-        //Dataset object that keeps the input and target arrays
+        //creates dataset object and assigns the data from the training dataset
         Dataset dataset = new Dataset();
         dataset.inputs = inputs;
         dataset.targets = targets;
         dataset.lettersList = lettersList;
+        dataset.classList = classList;
+        dataset.variantToLetter = variantToLetter;
 
         return dataset;
     }
