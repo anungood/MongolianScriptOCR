@@ -12,9 +12,9 @@ public class DatasetProcessor {
     public static class Dataset {
         public double[][] inputs;
         public double[][] targets;
-        public ArrayList<String> lettersList;// unique letters, used for mapping later
-        public ArrayList<String> classList;   // each variant = class for training
-        public HashMap<String, String> variantToLetter; // map variant -> letter
+        public ArrayList<String> glyphList;//unique glyphs, used for mapping later
+        public ArrayList<String> classList;   //each different variant of the same glyph is processed as class for training
+        public HashMap<String, String> variantToGlyph; //map different variant of the glyph to the same glyph
     }
 
     //method to load images from folders and apply one-hot encoding
@@ -30,36 +30,31 @@ public class DatasetProcessor {
             throw new Exception("Dataset folder doesn't exist or it is empty!");
         }
 
-        //saving unique letters from the training set by cutting before the underscore in each folder name
-        //HashSet<String> lettersSet = new HashSet<>();
-        ArrayList<String> classList = new ArrayList<>(); //saves all the different variants of the letters from the letters
-        HashMap<String, String> variantToLetter = new HashMap<>(); //maps the variant to each letter
-        HashSet<String> lettersSet = new HashSet<>();
+        //saving unique glyphs from the training set by cutting before the underscore in each folder name
+        ArrayList<String> classList = new ArrayList<>(); //saves all the different variants of the glyphs
+        HashMap<String, String> variantToGlyph = new HashMap<>(); //maps the variant to each glyph
+        HashSet<String> glyphSet = new HashSet<>();
         for (File folder : folders) {
-            //String uniqueLetter = folder.getName().split("_")[0];
-            //lettersSet.add(uniqueLetter);
             String variantName = folder.getName(); //gets the folder name
-            String letter = variantName.split("_")[0]; //saves the letter from the letter name to map back
+            String glyph = variantName.split("_")[0]; //saves the glyph from the glyph name to map back
             classList.add(variantName);
-            variantToLetter.put(variantName, letter); //maps the variant name and the letter
-            lettersSet.add(letter);
+            variantToGlyph.put(variantName, glyph); //maps the variant name and the glyph
+            glyphSet.add(glyph);
         }
-        //creating an arraylist with the unique letters
-        ArrayList<String> lettersList = new ArrayList<>(lettersSet);
+        //creating an arraylist with the unique glyphs
+        ArrayList<String> glyphList = new ArrayList<>(glyphSet);
 
         //mapping variants to numerical indexes
-        HashMap<String, Integer> letterToIndex = new HashMap<>();
+        HashMap<String, Integer> glyphToIndex = new HashMap<>();
         for (int i = 0; i < classList.size(); i++) {
-            letterToIndex.put(classList.get(i), i);
+            glyphToIndex.put(classList.get(i), i);
         }
-        //System.out.println("Detected classes: " + letterToIndex);
+        //System.out.println("Detected classes: " + glyphToIndex);
 
         //loop over all the folders in the training set and get all the png images in each folder
         for (File folder : folders) {
             String folderName = folder.getName();
-            //String letter = folderName.split("_")[0];
             int classIndex = classList.indexOf(folderName); //gets the index of the variant
-            //int letterIndex = letterToIndex.get(uniqueLetter);
             File[] images = folder.listFiles((dir, name) -> name.endsWith(".png"));
             //skip if the folder is empty
             if (images == null) continue;
@@ -84,10 +79,10 @@ public class DatasetProcessor {
                 //target array to save the one-hot encoding
                 double[] target = new double[classList.size()];
                 Arrays.fill(target, 0.0); //fill the array with 0
-                target[classIndex] = 1.0; //the index of the letter becomes 1 in the array
+                target[classIndex] = 1.0; //the index of the right glyph becomes 1 in the array
                 inputList.add(input); //vector of the input image
-                targetList.add(target); //array of that has the target letter
-                //System.out.println("Folder: " + folderName + " Letter : " + uniqueLetter + " Index Number: " + letterIndex);
+                targetList.add(target); //array of that has the target glyph
+                //System.out.println("Folder: " + folderName + " Glyph : " + uniqueGlyph + " Index Number: " + GlyphIndex);
                 //System.out.println("Target vector: " + Arrays.toString(target));
             }
         }
@@ -100,9 +95,9 @@ public class DatasetProcessor {
         Dataset dataset = new Dataset();
         dataset.inputs = inputs;
         dataset.targets = targets;
-        dataset.lettersList = lettersList;
+        dataset.glyphList = glyphList;
         dataset.classList = classList;
-        dataset.variantToLetter = variantToLetter;
+        dataset.variantToGlyph = variantToGlyph;
 
         return dataset;
     }
@@ -122,8 +117,8 @@ public class DatasetProcessor {
         for (File folder : folders) {
             //folder name
             String folderName = folder.getName();
-            //getting unique letters
-            String letter = folderName.split("_")[0];
+            //getting unique glyphs from the folder names
+            String glyph = folderName.split("_")[0];
 
             //count all image files in the folder
             File[] images = folder.listFiles((dir, name) -> name.endsWith(".png"));
@@ -134,7 +129,7 @@ public class DatasetProcessor {
                 count = 0;
             }
 
-            System.out.println("Letter: " + letter + " Folder Name: " + folderName + " Image Count: " + count);
+            System.out.println("Glyph: " + glyph + " Folder Name: " + folderName + " Image Count: " + count);
         }
     }
 }

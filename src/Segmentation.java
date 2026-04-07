@@ -12,7 +12,6 @@ public class Segmentation {
         //load image file
         String inputFileName = "segMLPtest.png";
         File file = new File(inputFileName);
-        ArrayList <int[]> letterCoordinates = new ArrayList<>();
         //Buffered Image object
         BufferedImage img = null;
         BufferedImage wordOnlyImage = null;
@@ -44,14 +43,14 @@ public class Segmentation {
         ArrayList <int[]> columnCoordinates = segmentColumns(binarizedImage);
         //finds the coordinates for every word in every column
         ArrayList<int[]> everyWordCoordinates = segmentWordsPerColumn(binarizedImage, columnCoordinates);
-        ArrayList<BufferedImage> letters = new ArrayList<>(); //variable to save the resized image of the letters
+        ArrayList<BufferedImage> glyphs = new ArrayList<>(); //variable to save the resized image of the letters
 
         //calls the method to segment letters for each word and then resize it
         for (int w = 0; w < everyWordCoordinates.size(); w++) {
             int[] eachWordCoordinates = everyWordCoordinates.get(w);
-            letters = segmentLettersAndResize(binarizedImage, eachWordCoordinates, inputFileName, w);
-            for (BufferedImage letter : letters) {
-                double[] inputVector = Segmentation.preprocessImage(letter);
+            glyphs = segmentGlyphsAndResize(binarizedImage, eachWordCoordinates, inputFileName, w);
+            for (BufferedImage glyph : glyphs) {
+                double[] inputVector = Segmentation.preprocessImage(glyph);
                 System.out.println(Arrays.toString(inputVector));
             }
         }
@@ -290,14 +289,14 @@ public class Segmentation {
     }
 
     //segments every letter by creating artificial whitespace through cutting the word text image from the left
-    public static ArrayList<BufferedImage> segmentLettersAndResize(BufferedImage img, int[] eachWordCoordinates, String inputFileName, int wordCount) {
+    public static ArrayList<BufferedImage> segmentGlyphsAndResize(BufferedImage img, int[] eachWordCoordinates, String inputFileName, int wordCount) {
         //Variable Declarations
         ArrayList<BufferedImage> letters = new ArrayList<>();
         int startX = eachWordCoordinates[0];
         int startY = eachWordCoordinates[1];
         int endX = eachWordCoordinates[2];
         int endY = eachWordCoordinates[3];
-        ArrayList<int[]> letterCoordinates = new ArrayList<>(); //variable to save the coordinates of the letters
+        ArrayList<int[]> glyphCoordinates = new ArrayList<>(); //variable to save the coordinates of the letters
         ArrayList<Integer> transitions = new ArrayList<>();
         //original word img
         int wordWidth = endX - startX;
@@ -352,7 +351,7 @@ public class Segmentation {
         }
 
         //threshold for whether or not to include the transition by comparing to the minimum height
-        int lastStart = transitions.getLast();
+        int lastStart = transitions.get(transitions.size()- 1);
         if (resizedWord.getHeight() - lastStart < minHeight && !transitions.isEmpty()) {
             //merge with previous transition if the transition length is too short
             transitions.set(transitions.size() - 1, endY);
@@ -385,10 +384,10 @@ public class Segmentation {
 
             if (end - start >= minHeight) { //enforcing that the transitions must be longer than the minimum height to avoid having small segments
                 int[] segmentCoordinates = new int[] { startX, start, endX, end };
-                letterCoordinates.add(segmentCoordinates);
+                glyphCoordinates.add(segmentCoordinates);
                 crop(resizedWord, segmentCoordinates);
                 //calls the resize letter method to scale the letter to 30*20 pixels, in order to feed it for the mlp
-                BufferedImage letter = resizeLetters(resizedWord, letterCoordinates, inputFileName, wordCount);
+                BufferedImage letter = resizeLetters(resizedWord, glyphCoordinates, inputFileName, wordCount);
                 letters.add(letter);
             }
         }
@@ -407,7 +406,7 @@ public class Segmentation {
         return resizedImage;
     }
 
-    public static BufferedImage resizeLetters (BufferedImage croppedImage, ArrayList<int[]> letterCoordinates, String inputFileName, int wordCount) {
+    public static BufferedImage resizeLetters (BufferedImage croppedImage, ArrayList<int[]> glyphCoordinates, String inputFileName, int wordCount) {
         int targetWidth = 30;
         int targetHeight = 20;
         BufferedImage resizedLetter = null;
@@ -430,12 +429,12 @@ public class Segmentation {
         }
 
         //separate image for the letter
-        for (int i = 0; i < letterCoordinates.size(); i++) {
-            int width = letterCoordinates.get(i)[2] - letterCoordinates.get(i)[0];
-            int height = letterCoordinates.get(i)[3] - letterCoordinates.get(i)[1];
+        for (int i = 0; i < glyphCoordinates.size(); i++) {
+            int width = glyphCoordinates.get(i)[2] - glyphCoordinates.get(i)[0];
+            int height = glyphCoordinates.get(i)[3] - glyphCoordinates.get(i)[1];
 
             //displaying segmented letters
-            BufferedImage letter = croppedImage.getSubimage(letterCoordinates.get(i)[0], letterCoordinates.get(i)[1], width, height);
+            BufferedImage letter = croppedImage.getSubimage(glyphCoordinates.get(i)[0], glyphCoordinates.get(i)[1], width, height);
             //display(letter);
             //calculating scaling value
             double scale = Math.min((double) targetWidth / width, (double) targetHeight / height);
