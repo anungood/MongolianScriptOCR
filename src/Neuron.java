@@ -20,10 +20,10 @@ public class Neuron {
             //nextDouble() gives random number between 0 (included) and 1 (not included)
             //multiplying by 2 and minusing 1 makes the number between -1 and 1
             //assigns positive and negative weights
-            weights[i] = (rand.nextDouble() -0.5) * 0.1; // range: -0.5 to 0.5
+            weights[i] = (rand.nextDouble() - 0.5) * 0.1; // range: -0.5 to 0.5
         }
         //assigns random number for bias that is between -0.5 and 0.5
-        bias = (rand.nextDouble() -0.5) * 0.1;
+        bias = (rand.nextDouble() - 0.5) * 0.1;
 
     }
 
@@ -67,8 +67,7 @@ public class Neuron {
         double delta;
 
         if (useDerivative) {
-            //calculates delta = error * sigmoid'(z)
-            //adjusted error
+            //calculates delta = error * sigmoid'(z); adjusted error in the hidden layer
             delta = error * sigmoidDerivative();
         } else {
             //the output layer uses softmax and cross entropy so no need to apply the derivative

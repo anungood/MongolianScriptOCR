@@ -1,16 +1,25 @@
 import javax.imageio.ImageIO;
-import javax.swing.*;
-import java.awt.*;
-import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+//imports used for normalizing the glyph image after segmenting
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.image.BufferedImage;
+//imports used to display the image on screen for debugging purposes -> will be deleted on final version of the code
+import javax.swing.JLabel;
+import javax.swing.JFrame;
+import javax.swing.ImageIcon;
+import javax.swing.WindowConstants;
 
 public class Segmentation {
+    //delete in the final code
     public static void main(String[] args) {
         //load image file
-        String inputFileName = "segMLPtest.png";
+        String inputFileName = "datasets2.png";
         File file = new File(inputFileName);
         //Buffered Image object
         BufferedImage img = null;
@@ -28,7 +37,7 @@ public class Segmentation {
         }
 
         //method to find the bounding box of the text in the image
-        int[] edgesCoordinates = detectWordSpace(img);
+        int[] edgesCoordinates = detectBoundingBox(img);
 
         //crops the image to the detected word space if coordinates for pixels are detected
         if (edgesCoordinates[0] == 0) {
@@ -48,15 +57,15 @@ public class Segmentation {
         //calls the method to segment letters for each word and then resize it
         for (int w = 0; w < everyWordCoordinates.size(); w++) {
             int[] eachWordCoordinates = everyWordCoordinates.get(w);
-            glyphs = segmentGlyphsAndResize(binarizedImage, eachWordCoordinates, inputFileName, w);
+            glyphs = segmentGlyphsAndNormalize(binarizedImage, eachWordCoordinates, inputFileName, w);
             for (BufferedImage glyph : glyphs) {
-                double[] inputVector = Segmentation.preprocessImage(glyph);
+                double[] inputVector = Segmentation.flattenImage(glyph);
                 System.out.println(Arrays.toString(inputVector));
             }
         }
     }
 
-    // display an image in a JPanel popup
+    // display an image in a JPanel popup for debugging purposes -> delete for final version
     public static void display(BufferedImage img) {
         System.out.println("Displaying image.");
         JFrame frame = new JFrame(); // main application window
@@ -69,48 +78,12 @@ public class Segmentation {
         frame.setVisible(true);
     }
 
-    //method to detect where the words are within the given image; finding the bounding box
-    public static int[] detectWordSpace(BufferedImage img){
-        //Variable Declarations
-        int width = img.getWidth(); // number of columns
-        int height = img.getHeight();  // number of rows
-        int threshold = 150; // threshold to identify the darker pixel for the words
-        int leftestWidth = width;
-        int highestHeight = 0;
-        int rightestWidth = 0;
-        int lowestHeight = height;
-        boolean found = false;
-
-        //detecting letters in pure black and white environment
-        //black strokes should be less than or equal to 10; Value of 0 is ideal
-        for (int x = 0; x < width; x++) {
-            for (int y = 0; y < height; y++) {
-                int pixel = img.getRGB(x, y) & 0xff;
-                if (pixel <= threshold) {
-                    found = true;
-                    //comparing the values to find the bounding box
-                    if (x < leftestWidth) leftestWidth = x;
-                    if (x > rightestWidth) rightestWidth = x;
-                    if (y > highestHeight) highestHeight = y;
-                    if (y < lowestHeight) lowestHeight = y;
-                }
-            }
-        }
-
-        //return empty array if there was no black pixel detected, assuming there isn't any word in the photo
-        if (!found) {
-            return new int[0];
-        }
-        return new int[] {leftestWidth, lowestHeight, rightestWidth, highestHeight};
-    }
-
     //binarizing an image to only black and white
     public static BufferedImage binarize(BufferedImage img) {
         System.out.println("Binarizing Image");
-        //create new BufferedImage called binarizedImage
-        //TYPE_BYTE_GRAY: each pixel is stored as one byte (8 bits) and they represent intensity/brightness
+        // binarizedImage uses TYPE_BYTE_GRAY, which represents a single-channel grayscale image where each pixel is stored as 8-bit intensity (0–255)
         BufferedImage binarizedImage = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_BYTE_GRAY);
-        int threshold = 150; //threshold to either make the pixel black or white
+        int threshold = 120; //threshold to either make the pixel black or white
         int rgb = 0, r = 0, g = 0, b = 0; //variable declarations for rgb value
 
         for (int y = 0; y < img.getHeight(); y++) {
@@ -141,7 +114,41 @@ public class Segmentation {
         return binarizedImage;
     }
 
-    //crops the input image into the given coordinates
+    //method to detect the bounding box that identifies the text region in the given image
+    public static int[] detectBoundingBox(BufferedImage img){
+        int width = img.getWidth(); //number of columns
+        int height = img.getHeight(); //number of rows
+        int threshold = 0; //threshold to identify the darker pixel for the words
+        int leftestWidth = width;
+        int highestHeight = 0;
+        int rightestWidth = 0;
+        int lowestHeight = height;
+        boolean found = false; //variable to keep track of the detection of black pixels in the image
+
+        //black strokes should be less than or equal to 120
+        for (int x = 0; x < width; x++) {
+            for (int y = 0; y < height; y++) {
+                int pixel = img.getRGB(x, y) & 0xff; //extracting the intensity value
+                if (pixel == threshold) {
+                    found = true; //sets to true if black pixel was found
+                    //comparing the values to find the bounding box
+                    if (x < leftestWidth) leftestWidth = x;
+                    if (x > rightestWidth) rightestWidth = x;
+                    if (y > highestHeight) highestHeight = y;
+                    if (y < lowestHeight) lowestHeight = y;
+                }
+            }
+        }
+
+        //return null if there was no black pixel detected, assuming there isn't any word in the photo
+        if (!found) {
+            return null;
+        }
+        //returns the coordinates for the text region
+        return new int[] {leftestWidth, lowestHeight, rightestWidth, highestHeight};
+    }
+
+    //crops the input image into the given coordinates -> use this for testing purposes to save the images in a folder
     public static BufferedImage crop (BufferedImage img, int[] edgeCoordinates) {
         BufferedImage croppedImg = img.getSubimage( edgeCoordinates[0], edgeCoordinates[1],
                 edgeCoordinates[2]-edgeCoordinates[0],
@@ -151,13 +158,14 @@ public class Segmentation {
         return croppedImg;
     }
 
-    //method to find the coordinates for each column in the input image using vertical projection profile
+    //method to find the coordinates for each column in the input image using Vertical Projection Profile (VPP)
     public static ArrayList<int[]> segmentColumns(BufferedImage img) {
-        ArrayList<Integer> transitions = new ArrayList<>();  //variable to keep the transitions
+        ArrayList<Integer> transitions = new ArrayList<>(); //variable to keep the transitions
         ArrayList<int[]> columnCoordinates = new ArrayList<>(); //variable to keep track of the column coordinates
         int width = img.getWidth();
         int height = img.getHeight();
         int[] vertSums = new int[width];
+        int minTransitionWidth = 1;
 
         //find the vertical projection profile by summing the count of black pixels
         for (int x = 0; x < width; x++) {
@@ -165,7 +173,7 @@ public class Segmentation {
             for (int y = 0; y < height; y++) {
                 int pixel = img.getRGB(x, y) & 0xff;
                 //add 1 if the pixel is black, add 0 if the pixel is otherwise
-                sum = (pixel < 50) ? 1 : 0;
+                sum = (pixel == 0 ) ? 1 : 0;
                 //finds column sum for each column
                 vertSums[x] += sum;
             }
@@ -176,15 +184,15 @@ public class Segmentation {
 
         for (int x = 0; x < width; x++) {
             if (!textExist && vertSums[x] > 0) {
-                //column starts when the sum of the column is greater than 0
+                //column starts when the sum of the black pixel is greater than 0
                 textExist = true;
                 startColumn = x;
             } else if (textExist && vertSums[x] == 0) {
                 //column ends when the sum of the column reaches 0
                 textExist = false;
                 int endColumn = x - 1;
-                //the start and end of the columns are added as transitions only when their length is greater or equal to 1
-                if (endColumn - startColumn >= 1) {
+                //the start and end of the columns are added as transitions only when their length is greater or equal to the minimum transition width
+                if (endColumn - startColumn >= minTransitionWidth) {
                     transitions.add(startColumn);
                     transitions.add(endColumn);
                 }
@@ -207,14 +215,14 @@ public class Segmentation {
                 int endX = transitions.get(i + 1);
                 int[] segmentCoordinates = new int[]{startX, 0, endX, height - 1};
                 //saves the x,y,width,height values
-                columnCoordinates.add(new int[]{startX, 0, endX, height - 1});
-                crop(img, segmentCoordinates);
+                columnCoordinates.add(new int[] {startX, 0, endX, height - 1});
+                crop(img, segmentCoordinates); //for debugging purposes
             }
         }
         return columnCoordinates;
     }
 
-    //method to segment the words within each column
+    //method to segment the words within each column using Horizontal Projection Profile (HPP)
     public static ArrayList<int[]> segmentWordsPerColumn(BufferedImage img, ArrayList <int[]> columnCoordinates) {
         ArrayList<int[]> wordCoordinates = new ArrayList<>(); //variable to save the word coordinates
 
@@ -289,36 +297,60 @@ public class Segmentation {
     }
 
     //segments every letter by creating artificial whitespace through cutting the word text image from the left
-    public static ArrayList<BufferedImage> segmentGlyphsAndResize(BufferedImage img, int[] eachWordCoordinates, String inputFileName, int wordCount) {
+    public static ArrayList<BufferedImage> segmentGlyphsAndNormalize(BufferedImage img, int[] eachWordCoordinates, String inputFileName, int wordCount) {
         //Variable Declarations
-        ArrayList<BufferedImage> letters = new ArrayList<>();
+        ArrayList<BufferedImage> glyphs = new ArrayList<>();
         int startX = eachWordCoordinates[0];
         int startY = eachWordCoordinates[1];
         int endX = eachWordCoordinates[2];
         int endY = eachWordCoordinates[3];
         ArrayList<int[]> glyphCoordinates = new ArrayList<>(); //variable to save the coordinates of the letters
         ArrayList<Integer> transitions = new ArrayList<>();
-        //original word img
+        boolean started = false; // Used to detect the start of the first glyph in the word
+
+        // Saving the details of the original word img
         int wordWidth = endX - startX;
         int wordHeight = endY - startY;
-        double cutValue;
+        double cutValue = 0.0;
         int targetWidth = 0;
         int minHeight = 0;
         BufferedImage wordImg = img.getSubimage(startX, startY, wordWidth, wordHeight);
 
 
         double ratio = (double)wordWidth/(double)wordHeight;
+        System.out.println( "word count " + wordCount + "word ratio: " + ratio);
         //depending on the ratio between the width and the height, the targetwidth, cutvalue, and minheight are set
-        if (ratio > 0.65) {
+        if (ratio >= 2.0) {
             targetWidth = 30;
-            cutValue = 0.28;
+            cutValue = 0.35;
+            minHeight = 0;
+        }
+        else if ((2.0 > ratio)  && (ratio >= 0.9))  {
+            targetWidth = 30;
+            cutValue = 0.38;
             minHeight = 3;
         }
-        else {
-            targetWidth = 40;
-            cutValue = 0.38;
-            minHeight = 5;
+        else if ((0.9 > ratio)  && (ratio >= 0.75))  {
+            targetWidth = 30;
+            cutValue = 0.39;
+            minHeight = 3;
         }
+        else if ((0.75 > ratio)  && (ratio >= 0.58))  {
+            targetWidth = 30;
+            cutValue = 0.41;
+            minHeight = 3;
+        }
+        else if (( 0.58 > ratio) && (ratio >= 0.50)) {
+            targetWidth = 40;
+            cutValue = 0.39;
+            minHeight = 4;
+        }
+        else if ( 0.50 > ratio) {
+            targetWidth = 40;
+            cutValue = 0.42;
+            minHeight = 4;
+        }
+
         double scale = (double) targetWidth / wordWidth;
         int resizedHeight = (int) (wordHeight * scale);
         //resize the original image into a fix width and scale the height
@@ -337,17 +369,23 @@ public class Segmentation {
         //find horizontal projection line within the left zone of the word
         int[] hppSum = findHPP(resizedWord, startX, startY, leftZoneEnd, endY);
 
-        //first letter always starts at the top of the word so the startY transition is added
-        if (hppSum.length > 0) {
-            transitions.add(startY);
-        }
-
         //loop over the hpp values and find the transition zone
         for (int i = 1; i < hppSum.length - 1; i++) {
+            //start of glyph in the word image is detected if hppSum becomes greater than 0
+            if (!started) {
+                if (hppSum[i] > 0) {
+                    transitions.add(i);
+                    started = true;
+                }
+                continue; // Move to the next iteration when the first transition is added to skip the rest of the transition detection code
+            }
+
+
             //transition is added when black pixel row turns to fully white
-            if (hppSum[i] == 0 && Math.abs(hppSum[i] - hppSum[i-1]) > 0) {
+            if (hppSum[i] == 0 && Math.abs(hppSum[i] - hppSum[i - 1]) > 0) {
                 transitions.add(i + 1);
             }
+
         }
 
         //threshold for whether or not to include the transition by comparing to the minimum height
@@ -363,36 +401,36 @@ public class Segmentation {
 
         //makes letter coordinates with the transitions; the end of the letter becomes the start of the next letter
         for (int i = 0; i < transitions.size() - 1; i++) {
-            int start = transitions.get(i);
-            int end = transitions.get(i + 1);
+            int startTransition = transitions.get(i);
+            int endTransition = transitions.get(i + 1);
 
             //skips duplicate or invalid transitions
-            if (end <= start) {
+            if (endTransition <= startTransition) {
                 continue;
             }
 
             //merges small segments that is less than the minHeight  with the next one
-            if (end - start < minHeight) {
+            if (endTransition - startTransition < minHeight) {
                 if (i + 2 < transitions.size()) {
                     //merges the next transition
-                    end = transitions.get(i + 2);
+                    endTransition = transitions.get(i + 2);
                     i++; //skips to the next transition
                 } else {
                     continue;
                 }
             }
 
-            if (end - start >= minHeight) { //enforcing that the transitions must be longer than the minimum height to avoid having small segments
-                int[] segmentCoordinates = new int[] { startX, start, endX, end };
+            if (endTransition - startTransition >= minHeight) { //enforcing that the transitions must be longer than the minimum height to avoid having small segments
+                int[] segmentCoordinates = new int[] { startX, startTransition, endX, endTransition };
                 glyphCoordinates.add(segmentCoordinates);
                 crop(resizedWord, segmentCoordinates);
                 //calls the resize letter method to scale the letter to 30*20 pixels, in order to feed it for the mlp
-                BufferedImage letter = resizeLetters(resizedWord, glyphCoordinates, inputFileName, wordCount);
-                letters.add(letter);
+                BufferedImage glyph = normalizeGlyphImage(resizedWord, glyphCoordinates, inputFileName, wordCount);
+                glyphs.add(glyph);
             }
         }
 
-        return letters;
+        return glyphs;
     }
 
     public static BufferedImage resizeImage(BufferedImage originalImage, int targetWidth, int targetHeight) {
@@ -406,13 +444,12 @@ public class Segmentation {
         return resizedImage;
     }
 
-    public static BufferedImage resizeLetters (BufferedImage croppedImage, ArrayList<int[]> glyphCoordinates, String inputFileName, int wordCount) {
+    public static BufferedImage normalizeGlyphImage (BufferedImage croppedImage, ArrayList<int[]> glyphCoordinates, String inputFileName, int wordCount) {
         int targetWidth = 30;
         int targetHeight = 20;
         BufferedImage resizedLetter = null;
         String extractedInputName = inputFileName;
         String outputFolder = "output";
-        double[] flattenedLetter = new double[targetHeight*targetWidth];
 
         //gets the index of where the dot is placed inside the input file name to cut the word
         int cutIndex = inputFileName.lastIndexOf('.');
@@ -468,8 +505,7 @@ public class Segmentation {
             gOut.dispose();
 
             //saves the resized image into a folder -> used for making letter training dataset
-            File outputFile = new File(folder, "word_" + wordCount + "_letter_" + i + ".png");
-
+            File outputFile = new File(folder, "word__" + wordCount + "_letter__" + i + ".png");
             try {
                 ImageIO.write(resizedLetter, "png", outputFile);
             } catch (IOException e) {
@@ -480,8 +516,8 @@ public class Segmentation {
         return resizedLetter;
     }
 
-    //method to read the image that needs predicting -> creates 1 dimensional vector
-    public static double[] preprocessImage(BufferedImage resizedLetter) {
+    //method flattens 2D image to 1D vector
+    public static double[] flattenImage(BufferedImage resizedLetter) {
         int width = resizedLetter.getWidth();
         int height = resizedLetter.getHeight();
         double[] input = new double[width * height];
@@ -490,56 +526,9 @@ public class Segmentation {
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
                 int pixel = resizedLetter.getRGB(x, y) & 0xff; //assuming grayscale images
-                input[y * width + x] = pixel / 255.0;
+                input[y * width + x] = pixel / 255.0; //normalized to the range [0,1]
             }
         }
         return input;
     }
-
 }
-/**
-//finds the overarching line the words are written for each column
-        for (int c = 0; c < columnCount; c++) {
-        System.out.println(Arrays.toString(columnCoordinates.get(c)));
-connectionLineIndex[c] = findConnectionLine(binarizedImage, columnCoordinates.get(c));
-        }
-
-        for  (int s : connectionLineIndex) {
-        System.out.println("Min Column");
-            System.out.println(s);
-        }
- **/
-
-/**
- //finds the main body line from the letters by calculating the column
- public static int findConnectionLine(BufferedImage img, int[] columnCoordinate) {
- // Variable Declarations
- int startX = columnCoordinate[0];
- int startY = columnCoordinate[1];
- int endX = columnCoordinate[2];
- int endY = columnCoordinate[3];
- int[] colSums = new int[endX];
- int minColumnIndex = startX; //variable to save the index for the lowest column value
-
- //gets the sum for each column pixels
- for (int x = startX; x < endX; x++) {
- for (int y = startY; y < endY; y++) {
- int pixel = img.getRGB(x, y) & 0xff;
- //finds column sum for each column;
- colSums[x] +=pixel;
- }
- }
-
- int minColumn = colSums[startX]; //variable to hold the value of the minimum column sum which will have the most black pixels
-
- //finds the index for the column with the lowest value
- for (int x = startX; x < endX; x++) {
- if (colSums[x] < minColumn) {
- minColumn = colSums[x];
- minColumnIndex = x;
- }
- }
- System.out.println("Min Column Sum: " + minColumn + " column x: " + minColumnIndex);
- return minColumnIndex;
- }
- **/

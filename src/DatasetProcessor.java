@@ -3,9 +3,9 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.*;
 
 public class DatasetProcessor {
     //nested class variable declaration
@@ -15,6 +15,7 @@ public class DatasetProcessor {
         public ArrayList<String> glyphList;//unique glyphs, used for mapping later
         public ArrayList<String> classList;   //each different variant of the same glyph is processed as class for training
         public HashMap<String, String> variantToGlyph; //map different variant of the glyph to the same glyph
+        public int count;
     }
 
     //method to load images from folders and apply one-hot encoding
@@ -24,6 +25,7 @@ public class DatasetProcessor {
         File[] folders = datasetDir.listFiles(File::isDirectory); //getting all the folders inside the directory
         ArrayList<double[]> inputList = new ArrayList<>();
         ArrayList<double[]> targetList = new ArrayList<>();
+        int count = 0; //saves number of samples in the folders
 
         //throw an exception if the folder is empty or the folder doesn't exist
         if (folders == null || folders.length == 0) {
@@ -57,7 +59,12 @@ public class DatasetProcessor {
             int classIndex = classList.indexOf(folderName); //gets the index of the variant
             File[] images = folder.listFiles((dir, name) -> name.endsWith(".png"));
             //skip if the folder is empty
-            if (images == null) continue;
+            if (images == null)  {
+                continue;
+            }
+            else {
+                count++;
+            }
 
             //read each images in the folder
             for (File imgFile : images) {
@@ -98,14 +105,15 @@ public class DatasetProcessor {
         dataset.glyphList = glyphList;
         dataset.classList = classList;
         dataset.variantToGlyph = variantToGlyph;
+        dataset.count = count;
 
         return dataset;
     }
 
-    //testing the dataset processor if it is reading the folders
+    //testing the dataset processor if it is reading the folders -> delete
     public static void main(String[] args) {
         //training data path
-        File datasetDir = new File("sampleTrainingDataset");
+        File datasetDir = new File("finalTrainingDataset");
 
         //show error message if the dataset folder isn't found
         if (!datasetDir.exists() || !datasetDir.isDirectory()) {
