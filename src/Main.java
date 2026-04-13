@@ -2,7 +2,6 @@
 //Will need to move the code in the Segmentation class's Main method later
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -11,7 +10,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Random;
+
 import com.sun.net.httpserver.HttpServer;
 
 public class Main {
@@ -21,7 +21,7 @@ public class Main {
 
     public static void main(String[] args) throws Exception {
          //loads and trains dataset into a static variable
-         dataset = DatasetProcessor.loadDataset("sampleTrainingDataset");
+         dataset = DatasetProcessor.loadDataset("finalTrainingDataset");
          mlp = trainModel(dataset);
 
          System.out.println("Dataset loaded!");
@@ -30,25 +30,6 @@ public class Main {
          System.out.println("Classes: " + dataset.targets[0].length);
           //starts the HTTP server
          startServer();
-          /**
-           get the image from website
-         String inputFileName = "segMLPtest.png";
-         File file = new File(inputFileName);
-         BufferedImage img = null;
-
-         //check if the image exists
-         try {
-              img = ImageIO.read(file);
-         } catch (IOException e) {
-              e.printStackTrace();
-              System.exit(1);
-         }
-
-         if (img != null) {
-              Segmentation.display(img);
-         }
-           **/
-
     }
      //method to train the MLP by loading the dataset
     private static MLP trainModel(DatasetProcessor.Dataset dataset) {
@@ -56,51 +37,46 @@ public class Main {
          int inputSize = dataset.inputs[0].length;
          int[] hiddenLayers = {180};
          int outputNeurons = dataset.targets[0].length;
-         double learningRate = 0.05;
-         int epochs = 800;
+         double learningRate = 0.005;
+         int epochs = 600;
 
          //initializing MLP
          MLP mlp = new MLP(inputSize, hiddenLayers, outputNeurons);
          double[] input = new double[inputSize];
 
          for (int epoch = 0; epoch < epochs; epoch++) {
+              //shuffle dataset before each epoch
+              shuffleDataset(dataset.inputs, dataset.targets);
+
               double totalLoss = 0.0;
+              double averageLoss = 0.0;
+              double loss = 0.0;
+
               for (int i = 0; i < dataset.inputs.length; i++) {
                    //forward pass
-                   double[] output = mlp.forward(dataset.inputs[i]);
-                   //softmax for the output
-                   double[] predicted = MLP.softmax(output);
-                   //cross entropy loss
-                   double loss = 0.0;
+                   double[] predicted = mlp.forward(dataset.inputs[i]);
+
+                   // Cathegorical cross entropy loss function to track loss during training
+                   loss = 0.0;
                    for (int j = 0; j < predicted.length; j++) {
-                        loss += -dataset.targets[i][j] * Math.log(predicted[j] + 1e-15); //prevent error when there is log(0)
+                        loss += -dataset.targets[i][j] * Math.log(predicted[j] + 1e-15); // 1e-15 is a small number to prevent error when there is log(0)
                    }
-                   totalLoss += loss;
 
                    //backpropagation
                    mlp.backward(predicted, dataset.targets[i], learningRate);
               }
 
+              totalLoss += loss;
+              averageLoss = totalLoss/ dataset.count;
+
               //print loss every 200 epochs
-              if (epoch % 200 == 0) {
-                   System.out.printf("Epoch %d - Loss: %.4f%n", epoch, totalLoss);
+              if (epoch % 100 == 0) {
+                   System.out.printf("Epoch %d - Average Loss: %.4f%n", epoch, averageLoss);
               }
          }
 
          System.out.println("\nMLP training is finished.");
-         /**
-         //testing the mlp
-         System.out.println("\nTesting:");
 
-         for (int i = 0; i < dataset.inputs.length; i++) {
-              double[] output = mlp.forward(dataset.inputs[i]);
-              double[] predicted = MLP.softmax(output);
-
-              System.out.println("Predicted: " + Arrays.toString(predicted));
-              System.out.println("Target: " + Arrays.toString(dataset.targets[i]));
-              System.out.println();
-         }
-          **/
          return mlp;
     }
      //method to start the server, get the user uploaded image, and return the prediction
@@ -126,7 +102,7 @@ public class Main {
                //allows the browser to communicate with the backend
                exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
                exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "POST, OPTIONS"); //allows POST request
-               exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type, File-Name"); //allows customer headers
+               exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type, File-Name"); //allows custom headers
 
                //handles OPTIONS request that comes before the real browser request
                if ("OPTIONS".equals(exchange.getRequestMethod())) {
@@ -143,7 +119,7 @@ public class Main {
                     InputStream is = exchange.getRequestBody(); //gets the uploaded image
                     BufferedImage img = ImageIO.read(is); //turns the uploaded image into BufferedImage object
 
-                    //feed the image into the predict methods depending on if it is for prediciting glyph or text
+                    //feed the image into the predict methods depending on if it is for predicting glyph or text
                     if ("glyph".equalsIgnoreCase(mode)) {
                          result = predictSingleGlyph(img);
                     } else {
@@ -170,9 +146,9 @@ public class Main {
      }
      //method to predict the glyph in the given image
      private static String predictSingleGlyph(BufferedImage img) {
-          double[] inputVector = Segmentation.preprocessImage(img);
-          double[] output = mlp.forward(inputVector);
-          double[] prediction = MLP.softmax(output);
+          BufferedImage binarizedGlyphImage = Segmentation.binarize(img);
+          double[] inputVector = Segmentation.flattenImage(binarizedGlyphImage);
+          double[] prediction = mlp.forward(inputVector);
 
           int predictedIndex = 0;
           double maxProb = prediction[0];
@@ -191,36 +167,35 @@ public class Main {
 
     private static String predictText (BufferedImage img, String inputFileName) throws Exception {
          //finds the bounding box of the text in the image
-         BufferedImage wordOnlyImage = null;
-         int[] edgesCoordinates = Segmentation.detectWordSpace(img);
+         BufferedImage textOnlyImage = null;
+         //binarizing the input image
+         BufferedImage binarizedImage = Segmentation.binarize(img);
+         int[] edgesCoordinates = Segmentation.detectBoundingBox(binarizedImage);
 
-         //crops the image to the detected word space if coordinates for pixels are detected
+         //crops the binarized image to a rectangle bounding box that contains the word region
          if (edgesCoordinates == null ) {
               System.out.println("There was no word detected in the image.");
-              return "No text detected"; //The program is terminated if there is no black pixel detected
+              return "No text detected"; //returns error message if there is no black pixel detected
          } else {
-              wordOnlyImage = Segmentation.crop(img, edgesCoordinates);
+              textOnlyImage = Segmentation.crop(binarizedImage, edgesCoordinates);
          }
 
-         //binarizing the cropped image
-         BufferedImage binarizedImage = Segmentation.binarize(wordOnlyImage);
-         //segments the columns in the binarized image
-         ArrayList<int[]> columnCoordinates = Segmentation.segmentColumns(binarizedImage);
+         //segments the columns in the text image
+         ArrayList<int[]> columnCoordinates = Segmentation.segmentColumns(textOnlyImage);
          //finds the coordinates for every word in every column
-         ArrayList<int[]> everyWordCoordinates = Segmentation.segmentWordsPerColumn(binarizedImage, columnCoordinates);
+         ArrayList<int[]> everyWordCoordinates = Segmentation.segmentWordsPerColumn(textOnlyImage, columnCoordinates);
          StringBuilder predictedText = new StringBuilder(); //variable to keep the predicted words in the image
 
          for (int w = 0; w < everyWordCoordinates.size(); w++) {
               StringBuilder predictedWord = new StringBuilder(); //variable to keep the word from the predicted glyphs
               int[] eachWordCoordinates = everyWordCoordinates.get(w);
               //calls the method to segment glyphs for each word and then resize it
-              ArrayList<BufferedImage> glyphs = Segmentation.segmentGlyphsAndResize(binarizedImage, eachWordCoordinates, inputFileName, w);
+              ArrayList<BufferedImage> glyphs = Segmentation.segmentGlyphsAndNormalize(textOnlyImage, eachWordCoordinates, inputFileName, w);
 
               for (BufferedImage glyph : glyphs) {
                    //the glyph image is flattened and then fed to the MLP
-                   double[] inputVector = Segmentation.preprocessImage(glyph);
-                   double[] output = mlp.forward(inputVector);
-                   double[] prediction = MLP.softmax(output); //softmax probability
+                   double[] inputVector = Segmentation.flattenImage(glyph);
+                   double[] prediction = mlp.forward(inputVector);
                    int predictedIndex = 0;
                    double maxProb = prediction[0];
 
@@ -230,45 +205,57 @@ public class Main {
                              predictedIndex = i;
                         }
                    }
-
-                   //map predicted folder back to glyph
                    String predictedFolder = dataset.classList.get(predictedIndex);
                    String predictedGlyph = dataset.variantToGlyph.get(predictedFolder);
-                   System.out.println("Predicted Glyph: " + predictedGlyph);
-                   double maxPercentage = Math.min(maxProb * 100, 99.99); //turning the probability to percentage
-                   System.out.printf("Probability: %.2f%%%n", maxPercentage);
-                   predictedWord.append(predictedGlyph); //add the predicted glyph to word
+
+                   //append the predicted letter unless it is an endcut
+                   if (!predictedGlyph.equals("0")) {
+
+                        if ((predictedGlyph.equals("ᠢ") && ( w == 0))) {
+                             predictedGlyph = "ᠵ";
+                        }
+
+                        //map predicted folder back to glyph
+                        System.out.println("Predicted Glyph: " + predictedGlyph);
+                        double maxPercentage = Math.min(maxProb * 100, 99.99); //turning the probability to percentage
+                        System.out.printf("Probability: %.2f%%%n", maxPercentage);
+                        predictedWord.append(predictedGlyph); //add the predicted glyph to word
+                   }
               }
-              System.out.println("Predicted word: " + predictedWord.toString());
-              predictedText.append(predictedWord.toString()); //adds the word to the predicted sentence
+
+              System.out.println("Predicted word: " + predictedWord);
+              predictedText.append(predictedWord); //adds the word to the predicted sentence
               predictedText.append(" "); //adds space between words
          }
 
          System.out.println("Predicted sentence: " + predictedText.toString().trim());
          return predictedText.toString().trim();
     }
+
+    //shuffle dataset during training using Fisher–Yates shuffle algorithm
+    private static void shuffleDataset(double[][] inputs, double[][] targets) {
+         //initialize random number generator for shuffling
+         Random rand = new Random();
+         //ensure inputs and targets have the same length to maintain correct pairing
+         if (inputs.length != targets.length) {
+              throw new IllegalArgumentException("Inputs and targets must have same length");
+         }
+
+         for (int i = inputs.length - 1; i > 0; i--) {
+              int j = rand.nextInt(i + 1); //picks a random position between 0 and i (inclusive)
+
+              //swaps input vectors at indices i and j
+              double[] tempInput = inputs[i];
+              inputs[i] = inputs[j];
+              inputs[j] = tempInput;
+
+              //swaps corresponding target labels to maintain correct mapping with the input
+              double[] tempTarget = targets[i];
+              targets[i] = targets[j];
+              targets[j] = tempTarget;
+         }
+    }
 }
 
-
-/**
- double[] sampleInput = vectorLetter;
- double[] output = mlp.forward(sampleInput);
- double[] prediction = MLP.softmax(output); //softmax probability
- int predictedIndex = 0;
- double maxProb = prediction[0];
-
- for (int i = 1; i < prediction.length; i++) {
- if (prediction[i] > maxProb) {
- maxProb = prediction[i];
- predictedIndex = i;
- }
- }
-
- //map index back to letter
- String predictedLetter = lettersList.get(predictedIndex); // lettersList from DatasetProcessor
- System.out.println("Predicted letter: " + predictedLetter);
- double maxPercentage = Math.min(maxProb * 100, 99.99); //turning the probability to percentage
- System.out.printf("Probability: %.2f%%%n", maxPercentage);
- **/
 
 

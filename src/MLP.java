@@ -21,8 +21,7 @@ public class MLP {
         layers[layers.length - 1] = new Layer(outputNeurons, previousLayerSize);
     }
 
-    //does forward propagation for each layer except the output layer
-    //because output layer uses softmax
+    //does forward propagation with the activation function for each layer except the output layer because output layer uses softmax
     public double[] forward(double[] input) {
         double[] output = input;
 
@@ -31,14 +30,13 @@ public class MLP {
             boolean applyActivation = (i != layers.length - 1);
             output = layers[i].forward(output, applyActivation);
         }
-        return output;
+        return softmax(output); //applies softmax at the output layer automatically
     }
 
     //backward propagation for the MLP
     public void backward(double[] predicted, double[] target, double learningRate) {
-        //compute error at output layer
         double[] errors = new double[predicted.length];
-
+        //compute error at output layer
         for (int i = 0; i < predicted.length; i++) {
             errors[i] = predicted[i] - target[i];
         }
@@ -51,7 +49,7 @@ public class MLP {
         }
     }
 
-    //softmax function to turn the output into probabilities for each letter
+    //softmax function to turn the output into probabilities for each glyph
     public static double[] softmax(double[] output) {
         //variable declarations
         double max = output[0];
@@ -64,7 +62,7 @@ public class MLP {
                 max = num;
             }
         }
-        
+
         //funds sum of the exponent for each numbers in the array
         for (int i = 0; i < output.length; i++) {
             //max amount is subtracted to avoid overflow and large numbers

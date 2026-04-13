@@ -6,7 +6,7 @@ public class Layer {
 
     //Constructor with the size of the hidden layer and the input layer
     public Layer(int hiddenLayerSize, int inputSize) {
-        //empty array that can have Neuron class objects with the hidden layer size
+        //empty array that can have Neuron class objects with th hidden layer size
         System.out.println("Inside layer class");
         neurons = new Neuron[hiddenLayerSize];
 
@@ -16,16 +16,16 @@ public class Layer {
         }
     }
 
-    //For each neuron in the layer, forward pass the neurons with the
-    //activation function and save the output
+    // Performs the forward pass for all neurons in the layer
     public double[] forward(double[] inputs, boolean useActivation) {
-        //array to save the calculation after the forward pass for each neurons
+        // Array to store the output of each neuron in the layer
         double[] outputs = new double[neurons.length];
-        //uses the forward method in the Neuron class to calculate the activation function
+        // Forward propagate inputs through each neuron in the layer
+        // Each neuron computes its weighted sum and applies activation based on the boolean variable
         for (int i = 0; i < neurons.length; i++) {
             outputs[i] = neurons[i].forward(inputs, useActivation);
         }
-
+        // Return the layer's output vector
         return outputs;
     }
 
@@ -45,6 +45,5 @@ public class Layer {
         //returns the total error to propagate to the previous layer
         return previousErrors;
     }
-
 }
 
