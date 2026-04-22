@@ -1,0 +1,318 @@
+<!--
+    Mongolian Script OCR Web Interface
+
+    This file defines the front-end user interface for the Mongolian Script OCR system.
+    It allows users to upload images containing Mongolian script, select between
+    single-glyph or full-text recognition modes, and view the OCR prediction results.
+
+    The interface is structured into two main sections:
+    - Input panel (left side): handles image upload, mode selection, and user interaction
+    - Output panel (right side): displays the predicted OCR result
+
+    The frontend communicates with a Java backend via an HTTP POST request,
+    sending image data in binary format and receiving recognized text as a response.
+
+    Additionally, the interface provides optional image preview functionality
+    and visual feedback during processing.
+
+    This design focuses on simplicity, usability, and clear separation between
+    input and output components to support OCR evaluation and demonstration.
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+
+    <!--
+    Title displayed in the browser tab.
+    Identifies the application as a Mongolian Script OCR system.
+    -->
+    <title>Mongolian Script OCR</title>
+
+    <style>
+        /* Defines overall page layout, background color, and font */
+       body {
+           font-family: Arial, sans-serif;
+           margin: 0;
+           background: #D2B48C;
+           display: flex;
+           flex-direction: column;
+           align-items: center;
+       }
+
+       /* Header section for title and system description */
+       .header {
+           text-align: center;
+           margin: 20px 0;
+       }
+
+       .header h1 {
+           font-size: 36px;
+           color: #4B2E2E;
+           margin-bottom: 10px;
+       }
+
+       .header p {
+           font-size: 16px;
+       }
+
+       /* Splits UI into left (input) and right (output) sections */
+       .container {
+           display: flex;
+           width: 90%;
+           max-width: 1200px;
+           height: 70vh;
+           gap: 50px;
+           justify-content: center;
+       }
+
+       /* Left panel: image upload and controls */
+       .left {
+           max-width: 500px;
+           display: flex;
+           flex-direction: column;
+           justify-content: center;
+           align-items: center;
+           gap: 15px;
+       }
+
+       /* Right panel: prediction display */
+       .right {
+           display: flex;
+           justify-content: center;
+           align-items: center;
+       }
+
+       .left, .right {
+            flex: 0 0 45%; /* fixed width ratio */
+        }
+
+       /* Reusable container for UI sections */
+       .card {
+           background: white;
+           padding: 20px;
+           border-radius: 20px;
+           box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+           text-align: center;
+           width: 100%;
+           transition: transform 0.2s;
+           overflow: hidden;
+       }
+
+        /* Hover effect for visual feedback */
+       .card:hover {
+           transform: translateY(-5px);
+       }
+
+       /* Displays uploaded image before processing */
+       img {
+           max-width: 100%;
+           max-height: 400px;
+           object-fit: contain;
+           border-radius: 10px;
+           transition: transform 0.2s;
+       }
+
+       img:hover {
+           transform: scale(1.05);
+       }
+
+       /* Button Styling */
+       button {
+           padding: 10px 20px;
+           border: none;
+           border-radius: 10px;
+           background: #8B5E3C;
+           color: white;
+           cursor: pointer;
+           transition: background 0.2s;
+       }
+
+       button:hover {
+           background: #A06A4A;
+       }
+
+       /* Prediction display */
+       .prediction-container {
+           display: flex;
+           flex-direction: column;
+           align-items: center;
+           gap: 30px;
+       }
+
+       .prediction-label {
+           font-size: 18px;
+           font-weight: bold;
+           color: #4B2E2E;
+       }
+
+    /* Wrapper to center prediction output */
+    .prediction-wrapper {
+       width: 400px;
+       height: 300px;
+       display: flex;
+       justify-content: center;
+       align-items: center;
+       padding: 20px
+
+   }
+
+     /* Vertical text container for Mongolian script output.
+     Uses vertical writing mode to correctly display traditional script orientation.*/
+   .vertical-text {
+       font-family: "Mongolian Baiti", "Noto Sans Mongolian", serif;
+       width: 400px;
+       height: 300px;
+       font-size: 26px;
+       line-height: 1.6;
+       padding: 20px;
+
+       border-radius: 10px;
+       border: 2px solid #A06A4A;
+       box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+       background: #fffdf7;
+
+       overflow-y: auto;
+       white-space: pre-wrap;
+
+       /* Core styling for Mongolian vertical script */
+       writing-mode: vertical-lr;  /* columns go from left to right */
+   }
+    </style>
+</head>
+<body>
+
+<!-- Header: System Description -->
+<div class="header">
+    <h1>Mongolian Script OCR</h1>
+    <p>
+        <!-- Instructions and supported glyphs explanation -->
+        Upload a PNG image of Mongolian text and select either "Single Glyph" or "Full Text" mode. This Mongolian Script OCR system recognizes the following glyphs:
+        <br><br>• Initial and medial forms of ᠡ, ᠤ, ᠪ, and ᠷ
+        <br>• Medial, and connected forms of ᠢ
+        <br>• All positional variations (initial, medial, and final) of ᠨ, ᠮ, ᠯ, and ᠲ
+        <br>• The combined form ᠪᠤ
+        <br><br>For "Single Glyph" mode, the input image must be 30×20 pixels. For "Full Text" mode, word count is limited to 100. Click "Predict" to view the recognized output.
+    </p>
+</div>
+
+<!-- Main Interface -->
+<div class="container">
+
+    <!-- Left side that takes user input image -->
+    <div class="left">
+        <div class="card">
+
+            <h2>Upload Image</h2>
+            <br>
+
+            <!-- Mode selection: glyph vs full text -->
+            <label>
+                <input type="radio" name="mode" value="glyph" checked>
+                Single Glyph
+            </label>
+
+            <label>
+                <input type="radio" name="mode" value="text">
+                Full Text
+            </label>
+
+            <br><br>
+
+            <!-- Image file input -->
+            <input type="file" id="imageInput" accept="image/*">
+            <br><br>
+
+            <!-- Triggers OCR prediction -->
+            <button onclick="sendImage()">Predict</button>
+
+            <!-- Displays selected image preview -->
+            <div>
+                <img id="preview" />
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Right Side that displays prediction output -->
+    <div class="right">
+        <div class="card">
+
+            <h2>Prediction</h2>
+
+            <div class="prediction-container">
+                <div class="prediction-label">Predicted text:</div>
+
+                <div class="prediction-wrapper">
+                    <!-- Editable output box displaying OCR result -->
+                    <div id="resultBox" class="vertical-text" contenteditable="true"></div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+
+<script>
+    // Element References
+    const input = document.getElementById("imageInput");
+    const preview = document.getElementById("preview");
+    const resultBox = document.getElementById("resultBox");
+
+    // Show image preview when uploaded
+    input.addEventListener("change", () => {
+        const file = input.files[0];
+        preview.src = file ? URL.createObjectURL(file) : "";
+    });
+
+    // Send image to backend
+    async function sendImage() {
+        const file = input.files[0];
+
+        // Validate file selection
+        if (!file) {
+            resultBox.innerText = "Please select an image first!";
+            return;
+        }
+
+        // Get selected recognition mode (glyph or full text)
+        const mode = document.querySelector('input[name="mode"]:checked').value;
+        resultBox.innerText = "Processing...";
+
+        try {
+            // Convert image to binary format for transmission
+            const arrayBuffer = await file.arrayBuffer();
+
+            // Send POST request to OCR backend
+            const response = await fetch("http://localhost:8080/predict", {
+                method: "POST",
+                headers: {
+                    "File-Name": file.name,
+                    "Mode": mode,
+                    "Content-Type": "application/octet-stream"
+                },
+                body: arrayBuffer
+            });
+
+            // Handle server-side errors
+            if (!response.ok) {
+                const text = await response.text();
+
+                throw new Error(`Server error ${response.status}: ${text}`);
+            }
+
+            // Display OCR result
+            const text = await response.text();
+            resultBox.innerText = text;
+
+        // Display error message to user
+        } catch (error) {
+            resultBox.innerText = `Error: ${error.message}`;
+        }
+    }
+</script>
+
+</body>
+</html>
