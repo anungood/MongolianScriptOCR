@@ -1,48 +1,67 @@
-//Takes the input neurons and converts it into the output layer
+/**
+ * Represents a fully connected neural network layer within a Multilayer Perceptron (MLP)
+ * that consist of neurons.
+ *
+ * This class is responsible for:
+ * - Forward propagation: passing input data through all neurons in the layer
+ * - Aggregating neuron outputs from forward propagation into a single output vector
+ * - Backpropagation: distributing and combining gradients from the next layer
+ *
+ * The layer itself does not perform individual neuron computations, but instead
+ * coordinates data flow and gradient flow between consecutive layers in the network.
+ */
 
 public class Layer {
-    //array of neurons from the Neuron class
+
     private Neuron[] neurons;
 
-    //Constructor with the size of the hidden layer and the input layer
+    /**
+     * Initializes a fully connected layer.
+     */
     public Layer(int hiddenLayerSize, int inputSize) {
-        //empty array that can have Neuron class objects with th hidden layer size
-        System.out.println("Inside layer class");
+
         neurons = new Neuron[hiddenLayerSize];
 
-        //Initializes every neuron in the hidden layer with the input size
+        // Initialize neurons with  input size
         for (int i = 0; i < hiddenLayerSize; i++) {
             neurons[i] = new Neuron(inputSize);
         }
     }
 
-    // Performs the forward pass for all neurons in the layer
+    /**
+     * Forward propagation through the layer.
+     */
     public double[] forward(double[] inputs, boolean useActivation) {
-        // Array to store the output of each neuron in the layer
+
+        // Stores outputs produced by each neuron in this layer
         double[] outputs = new double[neurons.length];
-        // Forward propagate inputs through each neuron in the layer
-        // Each neuron computes its weighted sum and applies activation based on the boolean variable
+
+        // The layer aggregates all neuron outputs into a single output vector
+        // Delegates forward computation to each neuron
         for (int i = 0; i < neurons.length; i++) {
             outputs[i] = neurons[i].forward(inputs, useActivation);
         }
-        // Return the layer's output vector
+
         return outputs;
     }
 
-    //backward propagation for the whole layer
+    /**
+     * Backpropagation through the layer.
+     */
     public double[] backward(double[] errors, double learningRate, boolean isOutputLayer) {
-        //array to store total error contribution from the previous layer
+
         double[] previousErrors = new double[neurons[0].getWeights().length];
 
-        //loop through each neuron to calculate the error
+        // Backpropagate error through each neuron
         for (int i = 0; i < neurons.length; i++) {
             double[] neuronErrors = neurons[i].backward(errors[i], learningRate, !isOutputLayer);
-            //sum all errors to calculate total errors that is contributing to the previous layer
+
+            // Accumulate gradients from all neurons
             for (int j = 0; j < neuronErrors.length; j++) {
                 previousErrors[j] += neuronErrors[j];
             }
         }
-        //returns the total error to propagate to the previous layer
+
         return previousErrors;
     }
 }

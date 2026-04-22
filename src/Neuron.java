@@ -1,103 +1,115 @@
-//Store weights, bias, compute weighted sum of each neurons.
-//Apply activation function
 import java.util.Random;
 
+/**
+ * Represents a single computational unit (neuron) in a fully connected neural network.
+ *
+ * A neuron performs a linear transformation of its inputs followed by an optional
+ * non-linear activation function, forming the fundamental building block of the MLP.
+ *
+ * This class is responsible for:
+ * - Computing the weighted sum of inputs plus bias (linear transformation)
+ * - Applying an activation function during forward propagation (if required)
+ * - Storing intermediate values for backpropagation
+ * - Updating weights and bias using gradient descent during training
+ *
+ */
+
 public class Neuron {
-    //variable declarations
     private double[] weights;
     private double bias;
     private Random rand = new Random();
-    //variables to save the last input and output z
     private double[] previousInputs;
     private double previousOutput;
 
-    // constructor with the input size
+    /**
+     * Initializes neuron with random weights and bias.
+     * Weights are initialized in a small range for stable training.
+     */
     public Neuron(int inputSize) {
         weights = new double[inputSize];
 
-        // assigning random weights for each neurons with the random function
+        // Initialize weights in small range for stable training
         for (int i = 0; i < inputSize; i++) {
-            //nextDouble() gives random number between 0 (included) and 1 (not included)
-            //multiplying by 2 and minusing 1 makes the number between -1 and 1
-            //assigns positive and negative weights
-            weights[i] = (rand.nextDouble() - 0.5) * 0.1; // range: -0.5 to 0.5
+            weights[i] = (rand.nextDouble() - 0.5) * 0.1; // range: -0.05 to 0.05
         }
-        //assigns random number for bias that is between -0.5 and 0.5
+
+        // Bias initialized in range [-0.05, 0.05]
         bias = (rand.nextDouble() - 0.5) * 0.1;
 
     }
 
-    // activation function: sigmoid(x) → 1 / (1 + e^-x)
-    // make any input value between 0 and 1
-    //makes it non-linear: output=σ(z)
+    /**
+     * Sigmoid activation function.
+     */
     private double sigmoid(double x) {
         return 1.0 / (1.0 + Math.exp(-x));
     }
 
-    //forward pass for every neuron
+    /**
+     * Forward pass: computes z = w·x + b and applies activation if needed.
+     */
     public double forward(double[] inputs, boolean useActivation) {
-        //z: variable to hold the sum of weighted sum+bias
-        double sum = 0.0;
-        //saving the inputs as it will be useful for backprop
+
+        double z = 0.0;
+        // Saving the inputs as it will be useful for backpropagation
         previousInputs = inputs.clone();
 
-        //calculates z= weights*inputs + bias
+        // Applies linear transformation
         for (int i = 0; i < weights.length; i++) {
-            sum += weights[i] * inputs[i];
+            z += weights[i] * inputs[i];
         }
-        sum += bias;
+        z += bias;
 
-        //applies sigmoid function if it is not the output layer
+        // Applies sigmoid function if it is not the output layer
         if (useActivation) {
-            previousOutput = sigmoid(sum);
+            previousOutput = sigmoid(z);
+
         } else {
-            previousOutput = sum;
+            previousOutput = z;
         }
-        //returns value between 0 and 1 for hidden layers and raw numbers for output layer
+
         return previousOutput;
     }
 
-    //derivative of sigmoid function
-    public double sigmoidDerivative() {
+    /**
+     * Computes sigmoid derivative
+     */
+    private double sigmoidDerivative() {
         return previousOutput * (1 - previousOutput);
     }
 
-    //backward propagation for each neuron
+    /**
+     * Backpropagation step with gradient descent weight updates.
+     */
     public double[] backward(double error, double learningRate, boolean useDerivative) {
+
         double delta;
 
         if (useDerivative) {
-            //calculates delta = error * sigmoid'(z); adjusted error in the hidden layer
+            // Calculates delta for the hidden layer
             delta = error * sigmoidDerivative();
         } else {
-            //the output layer uses softmax and cross entropy so no need to apply the derivative
+            // The output layer uses softmax and cross entropy so no need to apply sigmoid derivative
             delta = error;
         }
 
-        //stores errors for the previous layer’s neurons
+        // Stores errors for the previous layer’s neurons
         double[] previousErrors = new double[weights.length];
-        //propagate error to previous layer BEFORE updating weights
+
+        // Propagate error to previous layer before updating weights
         for (int i = 0; i < weights.length; i++) {
             previousErrors[i] = delta * weights[i];
         }
 
-        //update weights (gradient descent)
+        // Update weights
         for (int i = 0; i < weights.length; i++) {
             weights[i] -= learningRate * delta * previousInputs[i];
         }
-        //update bias
+
+        // Update bias
         bias -= learningRate * delta;
 
         return previousErrors;
-    }
-
-    //getters and setters
-    public double[] getLastInputs() {
-        return previousInputs;
-    }
-
-    public double getLastOutput() {
-        return previousOutput;
     }
 
     public double[] getWeights() {

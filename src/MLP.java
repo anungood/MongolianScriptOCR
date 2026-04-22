@@ -1,77 +1,110 @@
-//Class to create the layers and functions between the Layer and Neuron class
+/**
+ * Multilayer Perceptron (MLP) implementation for glyph classification in the Mongolian Script OCR system.
+ *
+ * This class represents the top-level neural network model responsible for coordinating both
+ * training and prediction across multiple fully connected layers.
+ *
+ * The network is structured hierarchically as follows:
+ * - Neuron: Basic computational unit that performs a weighted sum of inputs plus a bias and applies an
+ *   activation function during forward propagation, and updates its parameters during backpropagation.
+ *
+ * - Layer: A collection of neurons that transforms input vectors into output vectors and
+ *   manages the flow of activations and gradients between adjacent layers.
+ *
+ * - MLP: The overall model that connects multiple layers into a deep feedforward network,
+ *   performing forward propagation to generate predictions and backpropagation to update
+ *   all trainable parameters using gradient descent.
+ *
+ * This implementation supports classification by producing probability distributions over
+ * output classes using a final softmax activation.
+ */
+
 public class MLP {
-    //Variable Declaration
     private Layer[] layers;
 
-    //Construction that take layer sizes as arguments
-    public MLP(int inputSize, int[] hiddenLayerNeurons, int outputNeurons) {
-        System.out.println("Inside MLP class");
-        //saves the input layer size
-        int previousLayerSize = inputSize;
-        //number of layers to create including the output layer
-        layers = new Layer[hiddenLayerNeurons.length + 1];
+    /**
+     * Initializes MLP architecture from layer configuration.
+     */
+    public MLP(int inputSize, int[] hiddenLayerSize, int outputLayerSize) {
 
-        //creates hidden layer
-        for (int i = 0; i < hiddenLayerNeurons.length; i++) {
-            layers[i] = new Layer(hiddenLayerNeurons[i], previousLayerSize);
-            previousLayerSize = hiddenLayerNeurons[i];
+        int previousLayerSize = inputSize;
+
+        // Number of layers to create including the output layer
+        layers = new Layer[hiddenLayerSize.length + 1];
+
+        // Creates hidden layer(s)
+        for (int i = 0; i < hiddenLayerSize.length; i++) {
+            layers[i] = new Layer(hiddenLayerSize[i], previousLayerSize);
+            previousLayerSize = hiddenLayerSize[i];
         }
 
-        //creates output layer
-        layers[layers.length - 1] = new Layer(outputNeurons, previousLayerSize);
+        // Creates output layer
+        layers[layers.length - 1] = new Layer(outputLayerSize, previousLayerSize);
     }
 
-    //does forward propagation with the activation function for each layer except the output layer because output layer uses softmax
+    /**
+     * Forward propagation through the network for glyph classification.
+     */
     public double[] forward(double[] input) {
-        double[] output = input;
+        double[] layerOutput = input;
 
         for (int i = 0; i < layers.length; i++) {
-            //applies the activation function with sigmoid if it is not the output layer
-            boolean applyActivation = (i != layers.length - 1);
-            output = layers[i].forward(output, applyActivation);
+
+            // Apply activation for hidden layers
+            boolean useActivation = (i != layers.length - 1);
+            layerOutput = layers[i].forward(layerOutput, useActivation);
         }
-        return softmax(output); //applies softmax at the output layer automatically
+
+        return softmax(layerOutput); // Applies softmax at the output layer
     }
 
-    //backward propagation for the MLP
+    /**
+     * Backpropagation for weight update.
+     */
     public void backward(double[] predicted, double[] target, double learningRate) {
         double[] errors = new double[predicted.length];
-        //compute error at output layer
+
+        // Compute error at output layer (Categorical Cross Entropy + Softmax implementation)
         for (int i = 0; i < predicted.length; i++) {
             errors[i] = predicted[i] - target[i];
         }
 
-        //propagate error backward through all layers
+        // Propagate error backward through all layers
         for (int i = layers.length - 1; i >= 0; i--) {
-            //start from last layer and move backward
+
+            // Start from last layer and move backward
             boolean isOutputLayer = (i == layers.length - 1);
+
             errors = layers[i].backward(errors, learningRate, isOutputLayer);
         }
     }
 
-    //softmax function to turn the output into probabilities for each glyph
-    public static double[] softmax(double[] output) {
-        //variable declarations
-        double max = output[0];
+    /**
+     * Softmax activation for calculating probability distribution in the output layer.
+     */
+    public static double[] softmax(double[] logits) {
+        double max = logits[0];
         double sum = 0.0;
-        double[] exponentNum = new double[output.length];
+        double[] exponentNum = new double[logits.length];
 
-        //finding the maximum number in the output array-> used for normalization
-        for (double num : output) {
+        // Find max value for numerical stability
+        for (double num : logits) {
             if (num > max) {
                 max = num;
             }
         }
 
-        //funds sum of the exponent for each numbers in the array
-        for (int i = 0; i < output.length; i++) {
-            //max amount is subtracted to avoid overflow and large numbers
-            exponentNum[i] = Math.exp(output[i] - max);
-            sum +=exponentNum[i];
+        // Compute exponential
+        for (int i = 0; i < logits.length; i++) {
+
+            // Max amount is subtracted to avoid overflow and large numbers
+            exponentNum[i] = Math.exp(logits[i] - max);
+
+            sum += exponentNum[i];
         }
 
-        //find the probabilities by dividing by sum
-        for (int i = 0; i < output.length; i++) {
+        // Find the probabilities by dividing by sum
+        for (int i = 0; i < logits.length; i++) {
             exponentNum[i] /= sum;
         }
 
