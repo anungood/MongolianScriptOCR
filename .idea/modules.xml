@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/mongolian-ocr.iml" filepath="$PROJECT_DIR$/mongolian-ocr.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/MongolianScriptOCR.iml" filepath="$PROJECT_DIR$/.idea/MongolianScriptOCR.iml" />
     </modules>
   </component>
 </project>

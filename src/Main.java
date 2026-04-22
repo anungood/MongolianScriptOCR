@@ -88,7 +88,7 @@ public class Main {
          int[] hiddenLayers = {180};
          int outputNeurons = dataset.targets[0].length;
          double learningRate = 0.005;
-         int epochs = 600;
+         int epochs = 300;
 
          MLP mlp = new MLP(inputSize, hiddenLayers, outputNeurons);
 

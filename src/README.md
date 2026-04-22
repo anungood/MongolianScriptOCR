@@ -79,12 +79,16 @@ Mongolian script text image input into structured text output through preprocess
 
 ## How to Run
 
-1. Make sure the dataset path in the Main class is set. (Its default training set is set to finalTrainingSet)
+1. Make sure the dataset path in the Main class is set. Its default training set is set to finalTrainingSet.
+However, this path can be modified with different dataset location if needed. Additionally, images within the 
+finalTrainingDataset can be added, removed, or modified. If a new glyph variant needs to be added to the default 
+dataset, it must follow the naming convention: glyphName_Variant in order to be consistent with the dataset.
 
-2. Compile and run the `Main` class to train the dataset:
+2. Compile and run the `Main` class to train the dataset. The configuration of the neural network architecture 
+can be changed before the training under the trainModel() method in the Main class. The number of hidden layers and 
+number of epoch can be adjusted. 
 
 3. Open a web browser and navigate to:
-
    ```
    http://localhost:8080
    ```
@@ -94,15 +98,21 @@ Mongolian script text image input into structured text output through preprocess
     * **Glyph mode** for single character prediction
     * **Text mode** for full OCR processing
 
+5. View the result on the web interface. 
+
 ---
 
 ## Input Requirements
 
 * Images should contain a black and white printed Mongolian script, using Noto Sans Mongolian font with 40 pixel size
+* The character set is constrained to the glyph variations in the training dataset. The default
+training dataset supports  the initial and medial forms of ᠡ, ᠤ, ᠪ, and ᠷ; the medial and connected forms of ᠢ; all 
+positional variations of ᠨ, ᠮ, ᠯ, and ᠲ. Additionally, the system accounts for compound glyph behavior, such as the combination of ᠪ and ᠤ forming ᠪᠥ
 * Image must be in PNG format
 * High contrast (preferably black text on light background) with fully vertical positioning
 * For glyph mode: input image must be **30×20 pixels**
-* For full-text recognition mode, the word count limit is 100. 
+* For full-text recognition mode, the word count limit is 100
+* The text must be darker than the background with no noise 
 
 ---
 
@@ -126,7 +136,7 @@ The system supports two evaluation modes:
 
 * Designed for printed Mongolian script text image
 * Limited to trained glyph classes
-* Performance depends on image quality and segmentation accuracy
+* Performance depends on image quality, text positioning, and size
 
 ---
 
